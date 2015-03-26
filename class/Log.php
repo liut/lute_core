@@ -2,6 +2,7 @@
 /**
  * 日志处理
  *
+ * @package	Core
  * @author liut
  * @version $Id$
  * @created 13:30 2009-04-21
@@ -32,8 +33,9 @@ class Log
 	const TYPE_DEBUG = 	2; /* Use PHP's debugging connection */
 	const TYPE_FILE = 	3; /* Append to a file */
 
-	static $_logs = array();
-	static $_timeFormat = "%Y%m%d-%H%M%S";
+	private static $_logs = array();
+	private static $_lineFormat = '%1$s %2$s: [%3$s] %4$s';
+	private static $_timeFormat = '%Y%m%d-%H%M%S';
 
 	/**
 	 * write a log message
@@ -45,30 +47,24 @@ class Log
 	 * @param string $title
 	 * @return void
 	 */
-	public static function write($message, $priority, $title = '', $suffix = NULL, $name = NULL)
+	public static function write($message, $priority, $title = '', $suffix = NULL, $key = 'sp')
 	{
 		$level = defined('LOG_LEVEL') ? LOG_LEVEL : self::LEVEL_ERROR;
-		if($priority > $level) return false;
+		if($priority > $level) return FALSE;
 
-		if (is_null($name)) {
-			$name = defined('LOG_NAME') ? LOG_NAME : 'SP';
+		if (empty($key)) {
+			$key = defined('LOG_NAME') && preg_match('#^[a-z][a-z]+$#i', LOG_NAME) ? strtolower(LOG_NAME) : 'sp';
 		}
 
 		if (empty($suffix) || !preg_match('#^[a-z][a-z_]*$#i', $suffix)) {
-			$suffix = PHP_SAPI;
+			$suffix = 'main';
 		}
 
-		$now = time();
-		$key = strtolower($name);
+		$log_root = defined('LOG_ROOT') ? LOG_ROOT : '/tmp/';
+		$destination = $log_root .$key.'_'.$suffix;
 
-		static $cfgs = [];
-		if(!isset($cfgs[$key])) {
-			$log_root = defined('LOG_ROOT') ? LOG_ROOT : '/tmp/';
-			$cfgs[$key] = array(
-				'lineFormat' => '%1$s %2$s: [%3$s] %4$s' . PHP_EOL,
-				'destination' => $log_root .$key.'_'.$suffix.'_'.date('oW', $now).'.log'
-			);
-		}
+		'fpm-fcgi' === PHP_SAPI && ($destination .= '_fpm') || ($destination .= '_cli');
+
 		/* Extract the string representation of the message. */
 		$message = $title . ' ' . self::extractMessage($message);
 
@@ -77,19 +73,15 @@ class Log
 		}
 
 		/* Build the string containing the complete log line. */
-		$line = self::_format($cfgs[$key]['lineFormat'],
-							   strftime(static::$_timeFormat),
-							   $priority, $message);
+		$line = self::_format(static::$_lineFormat, strftime(static::$_timeFormat), $priority, $message);
 
 		/* Pass the log line and parameters to the error_log() function. */
-		$success = error_log($line, self::TYPE_FILE, $cfgs[$key]['destination']);
-
-		return false;
+		return error_log($line, self::TYPE_FILE, $destination.'.log');
 	}
 
 	private static function _format($format, $timestamp, $priority, $message, $ident = '')
 	{
-		return sprintf($format,
+		return sprintf($format . PHP_EOL,
 					   $timestamp,
 					   $ident,
 					   self::$_levels[$priority],
@@ -111,6 +103,13 @@ class Log
 		 * We also use the human-readable format for arrays.
 		 */
 		if (is_object($message)) {
+			if (method_exists($message, '__toString')) {
+				if (PHP_VERSION_ID > 50000) {
+					return (string)$message;
+				}
+				return $message->__toString();
+			}
+
 			if ($message instanceof Exception) {
 				return Loader::printException($message, TRUE);
 			}
@@ -119,39 +118,28 @@ class Log
 				return $message->getMessage();
 			}
 
-			if (method_exists($message, 'tostring')) {
-				return $message->toString();
-			}
-
-			if (method_exists($message, '__tostring')) {
-				if (version_compare(PHP_VERSION, '5.0.0', 'ge')) {
-					return (string)$message;
-				}
-
-				return $message->__toString();
-			}
+			// if (method_exists($message, 'tostring')) {
+			// 	return $message->toString();
+			// }
 
 			return var_export($message, true);
 		}
 
 		if (is_array($message)) {
-			if (isset($message['message'])) {
-				if (is_scalar($message['message'])) {
-					return $message['message'];
-				}
-
-				return var_export($message['message'], true);
+			if (isset($message['message']) && is_scalar($message['message'])) {
+				$code = isset($message['code']) ? 'code: '.$message['code'] . ', ' : '';
+				return $code . $message['message'];
 			}
 
-			return var_export($message, true);
+			return Arr::dullOut(array_map('static::extractMessage', $message));
 		}
 
-		if (is_bool($message) || $message === NULL) {
+		if (is_bool($message) || is_null($message)) {
 			return var_export($message, true);
 		}
 
 		/* Otherwise, we assume the message is a string. */
-		return $message;
+		return '"'.$message.'"';
 	}
 
 
@@ -162,9 +150,9 @@ class Log
 	 * @param
 	 * @return void
 	 */
-	public static function error($message, $title = '', $key = NULL, $name = NULL)
+	public static function error($message, $title = '', $suffix = NULL, $name = NULL)
 	{
-		return self::write($message, self::LEVEL_ERROR, $title, $key, $name);
+		return self::write($message, self::LEVEL_ERROR, $title, $suffix, $name);
 	}
 
 	/**
@@ -173,9 +161,9 @@ class Log
 	 * @param
 	 * @return void
 	 */
-	public static function warning($message, $title = '', $key = NULL, $name = NULL)
+	public static function warning($message, $title = '', $suffix = NULL, $name = NULL)
 	{
-		return self::write($message, self::LEVEL_WARNING, $title, $key, $name);
+		return self::write($message, self::LEVEL_WARNING, $title, $suffix, $name);
 	}
 
 	/**
@@ -184,9 +172,9 @@ class Log
 	 * @param
 	 * @return void
 	 */
-	public static function notice($message, $title = '', $key = NULL, $name = NULL)
+	public static function notice($message, $title = '', $suffix = NULL, $name = NULL)
 	{
-		return self::write($message, self::LEVEL_NOTICE, $title, $key, $name);
+		return self::write($message, self::LEVEL_NOTICE, $title, $suffix, $name);
 	}
 
 	/**
@@ -195,9 +183,9 @@ class Log
 	 * @param
 	 * @return void
 	 */
-	public static function info($message, $title = '', $key = NULL, $name = NULL)
+	public static function info($message, $title = '', $suffix = NULL, $name = NULL)
 	{
-		return self::write($message, self::LEVEL_INFO, $title, $key, $name);
+		return self::write($message, self::LEVEL_INFO, $title, $suffix, $name);
 	}
 
 	/**
@@ -206,9 +194,9 @@ class Log
 	 * @param
 	 * @return void
 	 */
-	public static function debug($message, $title = '', $key = NULL, $name = NULL)
+	public static function debug($message, $title = '', $suffix = NULL, $name = NULL)
 	{
-		return self::write($message, self::LEVEL_DEBUG, $title, $key, $name);
+		return self::write($message, self::LEVEL_DEBUG, $title, $suffix, $name);
 	}
 
 	/**

@@ -1,7 +1,7 @@
 <?php
 /**
  * AccountBase
- * 
+ *
  *
  * @author liut
  * @version $Id$
@@ -10,21 +10,21 @@
 
 /**
  * 	 账户基础类
- * 	
- * 	
- * 	
- * 
+ *
+ *
+ *
+ *
  * 	示例:
  * 	<code class="php">
  * 	class Eb_Account extends AccountBase
  * 	{
  * 		const COOKIE_NAME = '_bSA';
- * 		
- * 	
- * 	
+ *
+ *
+ *
  *	}
  * 	</code>
- * 	
+ *
  */
 abstract class AccountBase extends Model
 {
@@ -32,11 +32,15 @@ abstract class AccountBase extends Model
 	//const COOKIE_NAME = '_bSA';
 	//const COOKIE_LIFE = 604800;//	60*60*24*7;
 	//const ENCRYPT_KEY = "Mc8p-HUu182KQWSN";	// must be 16 chars
-	//const HASH_SALT = '';
-	
+
+	// 和 Authorization API 认证相关的常量
+	const API_NAME = NULL;
+	const API_ID = NULL;
+	const API_LIFE = 1800;
+
 	// 和 DB 相关的常量
 	//const FIELD_LOGIN   = 'email';			// 登录名字段
-	
+
 	// ERROR code
 	const ERR_NOT_FOUND 	= -1001;	// 没有这个用户
 	const ERR_INCORRECT 	= -1002; 	// 密码不正确
@@ -57,7 +61,7 @@ abstract class AccountBase extends Model
 	protected static $_current;
 	/**
 	 * return current singleton self
-	 * 
+	 *
 	 * @return object
 	 */
 	public static function current()
@@ -69,21 +73,31 @@ abstract class AccountBase extends Model
 
 	/**
 	 * retrieve account from request
-	 * 
+	 *
 	 * @return Account
 	 */
 	protected static function retrieve()
 	{
-		if(!isset($_COOKIE[static::COOKIE_NAME]) || empty($_COOKIE[static::COOKIE_NAME])) return static::guest();
-		
+		if(!isset($_COOKIE[static::COOKIE_NAME]) || empty($_COOKIE[static::COOKIE_NAME])) {
+			if (is_string(static::API_NAME) && is_int(static::API_ID)) {
+				$auth_name = 'HTTP_'.strtoupper(static::API_NAME);
+				$user = static::apiRetrieve($auth_name);
+				if ($user) {
+					return $user;
+				}
+			}
+
+			return static::guest();
+		}
+
 		$encrypted_string = $_COOKIE[static::COOKIE_NAME];
-		
+
 		$decryption = static::decrypt($encrypted_string, static::ENCRYPT_KEY);
 
 		if (!$decryption) {
 			return static::guest();
 		}
-		
+
 		$data = static::parseStored($decryption, static::$_stored_keys);
 		$data['stateStored'] = true;
 		$user = static::farm($data);
@@ -92,8 +106,46 @@ abstract class AccountBase extends Model
 	}
 
 	/**
+	 * retrieve account from request, for api authorization
+	 *
+	 * @return Account
+	 * @author liut
+	 **/
+	protected static function apiRetrieve($auth_name)
+	{
+		if (!isset($_SERVER[$auth_name])) {
+			Log::info($auth_name, __METHOD__ . ' auth_name not found in header');
+			return FALSE;
+		}
+
+		$dat = $_SERVER[$auth_name];
+		Log::info($dat, 'Authorization header checked '.$auth_name);
+
+		$ah = Api_Token::farm(static::API_ID);
+		$ah->life(static::API_LIFE);
+
+		$arr = Api_Token::parse($dat);
+		Log::info($arr, 'token parsed');
+
+		if (is_array($arr) && $ah->verify($arr)) {
+			$api_access_key = base64_encode($arr['value']);
+			Log::info('token ok '.$api_access_key);
+			$data = static::findByPk((string)$api_access_key, 'access_key');
+			if ($data) {
+				// Log::info($data, __METHOD__.' found');
+				$data['stateStored'] = true;
+				return static::farm($data);
+			}
+			Log::warning($api_access_key, 'access key not found');
+		}
+
+		Log::warning($dat, 'Invalid Authorization');
+		return FALSE;
+	}
+
+	/**
 	 * 解析Coookie中存储的值为一个关联数组
-	 * 
+	 *
 	 * @param string $cookie_value
 	 * @param array $keys
 	 * @param string $delimiter
@@ -106,17 +158,17 @@ abstract class AccountBase extends Model
 		if(count($u_vals) > $k_len) $u_vals = array_slice($u_vals, 0, $k_len);
 		else $u_vals = array_pad($u_vals, $k_len, '');
 		$data = array_combine($keys, $u_vals);
-		
+
 		return $data;
 	}
 
 	/**
 	 * 用 base64 解码
-	 * 
+	 *
 	 * @param string $string
 	 * @return string
 	 */
-	protected static function base64Decode($string) 
+	protected static function base64Decode($string)
 	{
 		$base64_string = strtr($string, '-_.', '+/=');
 		return base64_decode($base64_string);
@@ -124,19 +176,19 @@ abstract class AccountBase extends Model
 
 	/**
 	 * 用 base64 编码
-	 * 
+	 *
 	 * @param string $string
 	 * @return string
 	 */
-	protected static function base64Encode($string) 
+	protected static function base64Encode($string)
 	{
 		$base64_string = base64_encode($string);
-		return strtr($base64_string, '+/=', '-_.');
+		return strtr($base64_string, '+/', '-_');
 	}
 
 	/**
 	 * 解密
-	 * 
+	 *
 	 * @param string $text
 	 * @param string $key
 	 * @return string
@@ -159,7 +211,7 @@ abstract class AccountBase extends Model
 
 	/**
 	 * 加密
-	 * 
+	 *
 	 * @param string $text
 	 * @param string $key
 	 * @return string
@@ -177,25 +229,29 @@ abstract class AccountBase extends Model
 
 	/**
 	 * 计算 Hash 过的密码
-	 * 
+	 *
 	 * @param string $password
 	 * @param string $salt
 	 * @return string
 	 */
-	public static function hashPassword($password, $salt)
+	public static function hashPassword($password)
 	{
-		return sha1($password.':'.strtolower(trim($salt)).static::HASH_SALT);
+		if (!function_exists('password_hash')) {
+			include_once LIB_ROOT . 'function/password_compat/password.php';
+		}
+
+		return password_hash($password, PASSWORD_DEFAULT);
 	}
-	
+
 	/**
 	 * 返回一个未认证的匿名用户对象
-	 * 
+	 *
 	 * @return Account
 	 */
 	protected static function guest()
 	{
 		static $_guest;
-		if($_guest === null) 
+		if($_guest === null)
 		{
 			$_guest = static::farm(array(
 				'id' => 0,
@@ -204,15 +260,14 @@ abstract class AccountBase extends Model
 		}
 		return $_guest;
 	}
-	
+
 	/**
 	 * 根据登录名和密码，验证用户
-	 * 
+	 *
 	 * @param string $username
 	 * @param string $password
 	 * @param array $option = null
-	 * @param string $pk default static::FIELD_LOGIN
-	 * @return mixed 成功返回对象，失败返回 负数或FALSE
+	 * @return mixed 成功返回 self instance，失败返回负数
 	 */
 	public static function authenticate($username, $password, $option = null)
 	{
@@ -222,45 +277,52 @@ abstract class AccountBase extends Model
 		if (!isset($pk) || empty($pk)) {
 			$pk = static::FIELD_LOGIN;
 		}
-		$user = static::load($username, array('pk' => $pk));
-		if($user->isValid()) {
-			if (!$user->password) {
-				return static::ERR_INCORRECT;
-			}
-			if(static::verify($user->password, $password, $username)) {
-				if($user->status < 1) {
-					return static::ERR_DISABLED;
-				}
-				return $user;
-			} else {
-				Log::notice('password incorrect: '.$username);
-				return static::ERR_INCORRECT;
-			}
+		$row = static::find([
+			'where' => [$pk => $username],
+			'columns' => 'id,'.$pk.',password,status',
+			'fetch' => 'row',
+			'limit' => 1
+		]);
+		if (!$row) {
+			return static::ERR_NOT_FOUND;
 		}
-		return static::ERR_NOT_FOUND;
-		
+
+		if (!$row['password']) {
+			Log::notice($username, __METHOD__.' password incorrect ');
+			return static::ERR_INCORRECT;
+		}
+
+		if(!static::verifyPassword($row['password'], $password)) {
+			$tlog = sprintf("password incorrect: %s %s***%s", $username, substr($password, 0, 1), substr($password, -1));
+			Log::notice($tlog, __METHOD__);
+			return static::ERR_INCORRECT;
+		}
+
+		if($row['status'] < 1) {
+			return static::ERR_DISABLED;
+		}
+
+		return static::load($row['id']);
 	}
-	
+
 	/**
 	 * verify password
 	 * @param string stored password
 	 * @param string input password
-	 * @param string salt
 	 * @return boolean
 	 */
-	public static function verify($password_stored, $password_input, $salt = '')
+	public static function verifyPassword($password_stored, $password_input)
 	{
-		$crypted_password = static::hashPassword($password_input, $salt);
-		if ($crypted_password === trim($password_stored)) {
-			return TRUE;
+		if (!function_exists('password_verify')) {
+			include_once LIB_ROOT . 'function/password_compat/password.php';
 		}
-		Log::debug('AccountBase::verify failed stored:' . $password_stored . ' crypted:' . $crypted_password . ' salt: '. $salt);
-		return FALSE;
+
+		return password_verify($password_input, $password_stored);
 	}
 
 	/**
 	 * 验证是否登录
-	 * 
+	 *
 	 * @param
 	 * @return void
 	 */
@@ -278,17 +340,8 @@ abstract class AccountBase extends Model
 	}
 
 	/**
-	 * 返回名字，真实姓名优先
-	 * 
-	 * @abstract
-	 * @return string
-	 */
-	abstract public function getName();
-	
-	
-	/**
 	 * 返回可用于存储在连线状态（如Cookie、Session等）中的值
-	 * 
+	 *
 	 * @return string
 	 */
  	protected function getStoredValue()
@@ -298,7 +351,18 @@ abstract class AccountBase extends Model
 	}
 
 	/**
-	 * 
+	 * set password
+	 *
+	 * @param string $password
+	 * @return void
+	 */
+	public function setPassword($password)
+	{
+		$this->_innerSet('password', static::hashPassword($password));
+	}
+
+	/**
+	 *
 	 */
 	public function save()
 	{
@@ -309,9 +373,9 @@ abstract class AccountBase extends Model
 				$id = $this->id;
 			} else {
 				$pk = static::FIELD_LOGIN;
-				$id = $this->login;
+				$id = $this->__get($pk);
 			}
-			$row = static::findByPk($id, $pk);
+			$row = static::exist($id, $pk);
 			if ($row) {
 				$this->isNew(FALSE);
 			}
@@ -321,7 +385,7 @@ abstract class AccountBase extends Model
 
 	/**
 	 * 退出（清除cookie）
-	 * 
+	 *
 	 * @return void
 	 */
 	public function signout()
@@ -335,7 +399,7 @@ abstract class AccountBase extends Model
 
 	/**
 	 * 最后命中时间
-	 * 
+	 *
 	 * @return void
 	 */
 	public function getLastHit()
@@ -346,7 +410,7 @@ abstract class AccountBase extends Model
 
 	/**
 	 * 根据发呆时间，检查并更新登录状态
-	 * 
+	 *
 	 * @return void
 	 */
 	public function refresh($force = FALSE)
@@ -375,7 +439,7 @@ abstract class AccountBase extends Model
 
 	/**
 	 * 设置Cookie, 设定为登录
-	 * 
+	 *
 	 * @param object $user
 	 * @return mixed
 	 */
@@ -397,6 +461,20 @@ abstract class AccountBase extends Model
 	protected static function now()
 	{
 		return isset($_SERVER['REQUEST_TIME']) ? $_SERVER['REQUEST_TIME'] : time();
+	}
+
+	private static $_cached_exists = [];
+
+	public static function exist($id, $pk = NULL)
+	{
+		$class = get_called_class();
+		is_null($pk) && $pk = static::FIELD_LOGIN;
+		$key = $class.'_'.$pk.'_'.$id;
+		if (!isset(self::$_cached_exists[$key])) {
+			self::$_cached_exists[$key] = static::findByPk($id, $pk);
+			Log::debug($class.'::exist '.$id . ' ' . (isset(self::$_cached_exists[$key])?'yes':'no'));
+		}
+		return self::$_cached_exists[$key];
 	}
 
 }

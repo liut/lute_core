@@ -7,7 +7,7 @@
  * @package Imsto
  * @author liut
  **/
-class Imsto_Entry 
+class Imsto_Entry
 {
 	const ERR_NOT_IMAGE = -3;
 
@@ -23,11 +23,12 @@ class Imsto_Entry
 	protected $_exif_data = NULL;
 	public $appid = 0;
 	public $userid = 0;
+	public $tags = '';
 
 
 	/**
 	 * build Entry instance from Upload Files
-	 * 
+	 *
 	 * @param string or array $field
 	 * @return object | FALSE
 	 */
@@ -36,16 +37,53 @@ class Imsto_Entry
 		if (isset($file['tmp_name']) && isset($file['name'])
 			&& isset($file['type']) && isset($file['size']) && $file['tmp_name']) {
 			$entry = new self($file['tmp_name'], $file['name'], $file['size'], $file['type']);
-			$entry->error = isset($file['error']) ? $file['error'] : 0;
+			$entry->error = isset($file['error']) ? $file['error'] : UPLOAD_ERR_OK;
 			return $entry;
+		}
+
+		if (isset($file['error']) && $file['error'] != UPLOAD_ERR_OK) {
+			$message = static::codeToMessage($file['error']);
+			throw new Exception($message, $file['error']);
 		}
 
 		return FALSE;
 	}
 
+	private static function codeToMessage($code)
+	{
+		switch ($code) {
+			case UPLOAD_ERR_INI_SIZE:
+				$message = "The uploaded file exceeds the upload_max_filesize directive in php.ini";
+				break;
+			case UPLOAD_ERR_FORM_SIZE:
+				$message = "The uploaded file exceeds the MAX_FILE_SIZE directive that was specified in the HTML form";
+				break;
+			case UPLOAD_ERR_PARTIAL:
+				$message = "The uploaded file was only partially uploaded";
+				break;
+			case UPLOAD_ERR_NO_FILE:
+				$message = "No file was uploaded";
+				break;
+			case UPLOAD_ERR_NO_TMP_DIR:
+				$message = "Missing a temporary folder";
+				break;
+			case UPLOAD_ERR_CANT_WRITE:
+				$message = "Failed to write file to disk";
+				break;
+			case UPLOAD_ERR_EXTENSION:
+				$message = "File upload stopped by extension";
+				break;
+
+			default:
+				$message = "Unknown upload error";
+				break;
+		}
+		return $message;
+	}
+
 	/**
 	 * constructor
-	 * 
+	 *
 	 * @return object
 	 */
 	public function __construct($file, $name = NULL, $size = NULL, $type = NULL)
@@ -120,4 +158,4 @@ class Imsto_Entry
 		return $this->_exif_data;
 	}
 
-} // END class 
+} // END class

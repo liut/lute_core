@@ -17,16 +17,16 @@ class Da_Wrapper_Select extends Da_Wrapper_Abstract
 	private $_orders;
 	private $_total;
 	private $_groups;
-	
+
 	const FUNC_ONE = 0;
 	const FUNC_COL = 1;
 	const FUNC_ROW = 2;
 	const FUNC_ALL = 3;
 	const FUNC_TAL = 4;
-	
+
 	/**
 	 * constructor
-	 * 
+	 *
 	 * @return self
 	 */
 	protected function __construct()
@@ -36,7 +36,7 @@ class Da_Wrapper_Select extends Da_Wrapper_Abstract
 
 	/**
 	 * set SELECT
-	 * 
+	 *
 	 * @return this
 	 */
 	public function columns()
@@ -52,10 +52,10 @@ class Da_Wrapper_Select extends Da_Wrapper_Abstract
 		}
 		return $this;
 	}
-	
+
 	/**
 	 * set ORDER BY
-	 * 
+	 *
 	 * @param mixed $orderby
 	 * @return object this
 	 */
@@ -73,7 +73,7 @@ class Da_Wrapper_Select extends Da_Wrapper_Abstract
 
 	/**
 	 * set GROUP BY
-	 * 
+	 *
 	 * @param mixed $groupby
 	 * @return void
 	 */
@@ -94,10 +94,10 @@ class Da_Wrapper_Select extends Da_Wrapper_Abstract
 		$this->_cache_key = null;
 		return $this;
 	}
-	
+
 	/**
 	 * set LIMIT
-	 * 
+	 *
 	 * @param int $limit
 	 * @param int $offset
 	 * @return object this
@@ -109,10 +109,10 @@ class Da_Wrapper_Select extends Da_Wrapper_Abstract
 		$this->_cache_key = null;
 		return $this;
 	}
-	
+
 	/**
 	 * function description
-	 * 
+	 *
 	 * @return void
 	 */
 	public function getTotal()
@@ -120,11 +120,11 @@ class Da_Wrapper_Select extends Da_Wrapper_Abstract
 		if($this->_total == null) $this->_total = $this->getDoSth(true)->fetchColumn(0);
 		return $this->_total;
 	}
-	
-	
+
+
 	/**
 	 * 分页查询
-	 * 
+	 *
 	 * @param int $limit
 	 * @param int $offset
 	 * @param int $total
@@ -138,13 +138,13 @@ class Da_Wrapper_Select extends Da_Wrapper_Abstract
 		}
 		// if($offset > $total) $offset = 0;
 		$this->limit($limit, $offset);
-		
+
 		return $this->getAll();
 	}
-	
+
 	/**
 	 * function description
-	 * 
+	 *
 	 * @return array
 	 */
 	public function getAll($fetch_style = PDO::FETCH_ASSOC)
@@ -156,7 +156,7 @@ class Da_Wrapper_Select extends Da_Wrapper_Abstract
 		return false;
 	}
 
-	/** 
+	/**
 	 * 返回第一行作为一个数组
 	 *
 	 */
@@ -169,7 +169,7 @@ class Da_Wrapper_Select extends Da_Wrapper_Abstract
 		return false;
 	}
 
-	/** 
+	/**
 	 * 返回第一行第一列的值
 	 *
 	 */
@@ -178,7 +178,7 @@ class Da_Wrapper_Select extends Da_Wrapper_Abstract
 		return $this->_getData(self::FUNC_ONE);
 	}
 
-	/** 
+	/**
 	 * 返回第一行第一列的值
 	 *
 	 */
@@ -189,7 +189,7 @@ class Da_Wrapper_Select extends Da_Wrapper_Abstract
 
 	/**
 	 * function description
-	 * 
+	 *
 	 * @param
 	 * @return void
 	 */
@@ -219,14 +219,14 @@ class Da_Wrapper_Select extends Da_Wrapper_Abstract
 
 	/**
 	 * function description
-	 * 
+	 *
 	 * @param
 	 * @return void
 	 */
 	private function getDoSth($count = false)
 	{
 		$sql = $this->genSql($count);
-		Log::debug(__CLASS__ . '->'. __FUNCTION__ .': '.$sql);
+		Log::info(__CLASS__ . '->'. __FUNCTION__ .': '.$sql);
 		$dbh = $this->getDbh(); //var_dump($dbh);
 		$input_parms = $this->getParams(); //var_dump($input_parms);
 		if(is_array($input_parms) && count($input_parms) > 0) {
@@ -249,7 +249,7 @@ class Da_Wrapper_Select extends Da_Wrapper_Abstract
 
 	/**
 	 * function description
-	 * 
+	 *
 	 * @return void
 	 */
 	public function genSql($count = false)
@@ -274,7 +274,7 @@ class Da_Wrapper_Select extends Da_Wrapper_Abstract
 	}
 	/**
 	 * function description
-	 * 
+	 *
 	 * @param
 	 * @return void
 	 */
@@ -291,10 +291,10 @@ class Da_Wrapper_Select extends Da_Wrapper_Abstract
 	{
 		return $this->_orders;
 	}
-	
+
 	/**
 	 * function description
-	 * 
+	 *
 	 * @return string
 	 */
 	public function genOrder()
@@ -311,10 +311,10 @@ class Da_Wrapper_Select extends Da_Wrapper_Abstract
 		}
 		return '';
 	}
-	
+
 	/**
 	 * function description
-	 * 
+	 *
 	 * @return void
 	 */
 	public function genGroup()
@@ -324,11 +324,11 @@ class Da_Wrapper_Select extends Da_Wrapper_Abstract
 		}
 		return '';
 	}
-	
-	
+
+
 	/**
 	 * function description
-	 * 
+	 *
 	 * @param
 	 * @return void
 	 * @deprecated
@@ -344,12 +344,12 @@ class Da_Wrapper_Select extends Da_Wrapper_Abstract
 					} else {
 						$str .= sprintf("_%s_%s_%s", $key, ord($val[0]), $val[1]);
 					}
-					
+
 				}
 			}
 			$this->_cache_key = $str;
 		}
 		return $this->_cache_key;
 	}
-	
+
 }

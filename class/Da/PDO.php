@@ -35,7 +35,7 @@ class Da_PDO extends PDO
 
 			static::log(empty($params) ? '' : $params, $msg);
 
-			$this->_logs[] = $msg . (count($params) > 0 ? ' :' . Arr::dullOut($params) : '');
+			$this->_logs[] = $msg . (is_array($params) && count($params) > 0 ? ' :' . Arr::dullOut($params) : '');
 			if ('cli' === PHP_SAPI) {
 				Log::debug($msg, __CLASS__ . ' ' . $this->key);
 			}
@@ -44,7 +44,7 @@ class Da_PDO extends PDO
 
 	private static function log($msg, $title = '', $key = NULL)
 	{
-		Log::write($msg, Log::LEVEL_INFO, $title, $key, 'db');
+		Log::info($msg, $title, 'pdo');
 	}
 
 	/**
@@ -96,7 +96,7 @@ class Da_PDO extends PDO
 	 * @return mixed
 	 *
 	 */
-	public function select($table, array $cond = array(), $columns = '*', $opt = array())
+	public function select($table, array $cond = [], $columns = '*', $opt = array())
 	{
 		static::validateTable($table);
 		//static::validateWhere($cond);
@@ -203,7 +203,7 @@ class Da_PDO extends PDO
 	 * @param array $cond condition
 	 * @return boolean
 	 */
-	public function update($table, array $data, array $cond = array())
+	public function update($table, array $data, array $cond = [])
 	{
 		static::validateTable($table);
 		static::validateData($data);
@@ -227,7 +227,7 @@ class Da_PDO extends PDO
 	 * @param array $data
 	 * @return boolean
 	 */
-	public function insert($table, array $data, $opt = array())
+	public function insert($table, array $data, array $opt = [])
 	{
 		static::validateTable($table);
 		static::validateData($data);
@@ -235,9 +235,12 @@ class Da_PDO extends PDO
 		$func = function($k){
 			return ':'.$k;
 		};
+
+		$is_pgsql = 'pgsql' === $this->getAttribute(PDO::ATTR_DRIVER_NAME);
+
 		$sql = 'INSERT INTO '.$table.'('.implode(',',$cols).') VALUES('.implode(',',array_map($func, $cols)).')';
 
-		if (isset($opt['ret_id']) && is_string($opt['ret_id']) && ctype_alpha($opt['ret_id'])) {
+		if ($is_pgsql && isset($opt['ret_id']) && is_string($opt['ret_id']) && ctype_alpha($opt['ret_id'])) {
 			$sql .= ' RETURNING ' . $opt['ret_id'];
 			return $this->getOne($sql, $data);
 		}
@@ -245,21 +248,26 @@ class Da_PDO extends PDO
 		$this->_log('insert: '.$sql, $data);
 		$ret = $this->execute($sql, $data);
 
-		if ($ret && !isset($data['id'])) {
-			$new_id = 0;
-			// TODO: check database engine for acquire last insert id
-			if ($this->getAttribute(PDO::ATTR_DRIVER_NAME) == 'pgsql') {
+		if (isset($data['id']) || strncmp($table, 'map_', 4) === 0) {
+			return $ret;
+		}
+
+			if ($ret && $is_pgsql) {
 				$_seq = $table . '_id_seq';
 				if ($this->checkSeq($_seq)) {
+					$this->_log('checkSeq: '. $_seq);
 					$new_id = $this->lastInsertId($_seq);
-				} else $new_id = TRUE;
+				}
 				unset($_seq);
 			} else {
 				$new_id = $this->lastInsertId();
 			}
-			if (is_numeric($new_id)) return (int)$new_id;
-			return $new_id;
-		}
+			if (isset($new_id)) {
+				$this->_log('new_id: '. $new_id);
+				if (is_numeric($new_id)) return (int)$new_id;
+				return $new_id;
+			}
+
 		return $ret;
 	}
 
@@ -280,6 +288,7 @@ class Da_PDO extends PDO
 		}
 		$value = $this->getOne($sql, $cond);
 		if ($value) return TRUE;
+
 		return FALSE;
 	}
 
@@ -475,6 +484,13 @@ class Da_PDO extends PDO
 		return implode($pad, $arr);
 	}
 
+	private static $_magic_caps = [
+		'gt'  => '>',
+		'gte' => '>=',
+		'lt'  => '<',
+		'lte' => '<=',
+		'ne'  => '<>'
+	];
 	/**
 	 * build where statement
 	 * for replace buildAssignment(array, true)
@@ -488,19 +504,28 @@ class Da_PDO extends PDO
 	{
 		$arr = [];
 		$params = [];
-		foreach ($where as $k => $v) {
-			$str = $k . ' ';
+		foreach ($where as $field => $v) {
 			if (is_null($v)) {
-				$str .= 'IS NULL';
+				$arr[] = $field . ' IS NULL';
+				continue;
 			}
-			elseif (is_array($v)) {
+
+			if (is_string($v) && strpos($v, '__') > 0) {
+				list($cap, $value) = explode('__', $v, 2);
+				if (isset(static::$_magic_caps[$cap])) {
+					$v = [static::$_magic_caps[$cap], $value];
+				}
+			}
+
+			if (is_array($v)) {
+				$str = $field . ' ';
 				if (count($v) == 0) {
 					Log::error($where, __METHOD__);
-					throw new Exception("Error condition array", 1);
+					throw new Exception("Error condition array, value of `$field` is empty", 1);
 				}
 
 				// 数字字段特殊处理，允许省略 IN 关键字
-				if (count($v) > 1 && is_numeric($v[0]) && is_numeric($v[1])) {
+				if (count($v) > 1 && is_numeric(end($v)) && is_numeric(reset($v))) {
 					$op = 'IN';
 				}
 				elseif (count($v) == 1) {
@@ -511,8 +536,8 @@ class Da_PDO extends PDO
 				}
 
 				// 兼容旧版的查询条件
-				if (count($v) == 1 && is_array($v[0])) {
-					$v = $v[0];
+				if (count($v) == 1 && is_array(current($v))) {
+					$v = current($v);
 				}
 
 				if (($op == 'BETWEEN' || $op == 'OVERLAPS' || $op == '@@') && count($v) < 2) {
@@ -532,7 +557,7 @@ class Da_PDO extends PDO
 					$tmp = '';
 					foreach ($v as $val) {
 						if (!is_scalar($val)) {
-							Log::warning('Invalid value ' . $val . ' for ' . $k, __METHOD__);
+							Log::warning('Invalid value ' . $val . ' for ' . $field, __METHOD__);
 						}
 						$str .= $tmp . '?'; $tmp = ',';
 						$params[] = $val;
@@ -556,15 +581,15 @@ class Da_PDO extends PDO
 					Log::warning('Invalid op "' . $op . '" or value error', __METHOD__);
 					Log::notice($v, __METHOD__);
 				}
+				$arr[] = $str;
 			}
 			elseif (is_scalar($v)) {
-				$str .= '=?';
+				$arr[] = $field . ' =?';
 				$params[] = $v;
 			}
 			else {
-				Log::warning('condition ' . $k . ' value is invalid', __METHOD__);
+				Log::warning('condition ' . $field . ' value is invalid', __METHOD__);
 			}
-			$arr[] = $str;
 		}
 		return implode(' AND ', $arr);
 	}

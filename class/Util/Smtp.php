@@ -136,7 +136,7 @@ class Util_Smtp {
                            "errno" => $errno,
                            "errstr" => $errstr);
       if($this->do_debug >= 1) {
-        echo "SMTP -> ERROR: " . $this->error["error"] . ": $errstr ($errno)" . $this->CRLF . '<br />';
+        Log::error("SMTP -> ERROR: " . $this->error["error"] . ": $errstr ($errno)" . $this->CRLF . '<br />', __METHOD__);
       }
       return false;
     }
@@ -150,7 +150,7 @@ class Util_Smtp {
     $announce = $this->get_lines();
 
     if($this->do_debug >= 2) {
-      echo "SMTP -> FROM SERVER:" . $announce . $this->CRLF . '<br />';
+      Log::info("SMTP -> FROM SERVER:" . $announce . $this->CRLF . '<br />', __METHOD__);
     }
 
     return true;
@@ -179,7 +179,7 @@ class Util_Smtp {
     $code = substr($rply,0,3);
 
     if($this->do_debug >= 2) {
-      echo "SMTP -> FROM SERVER:" . $rply . $this->CRLF . '<br />';
+      Log::info("SMTP -> FROM SERVER:" . $rply . $this->CRLF . '<br />', __METHOD__);
     }
 
     if($code != 220) {
@@ -188,7 +188,7 @@ class Util_Smtp {
                "smtp_code" => $code,
                "smtp_msg"  => substr($rply,4));
       if($this->do_debug >= 1) {
-        echo "SMTP -> ERROR: " . $this->error["error"] . ": " . $rply . $this->CRLF . '<br />';
+        Log::error("SMTP -> ERROR: " . $this->error["error"] . ": " . $rply . $this->CRLF . '<br />', __METHOD__);
       }
       return false;
     }
@@ -220,7 +220,7 @@ class Util_Smtp {
               "smtp_code" => $code,
               "smtp_msg" => substr($rply,4));
       if($this->do_debug >= 1) {
-        echo "SMTP -> ERROR: " . $this->error["error"] . ": " . $rply . $this->CRLF . '<br />';
+        Log::error("SMTP -> ERROR: " . $this->error["error"] . ": " . $rply . $this->CRLF . '<br />', __METHOD__);
       }
       return false;
     }
@@ -237,7 +237,7 @@ class Util_Smtp {
               "smtp_code" => $code,
               "smtp_msg" => substr($rply,4));
       if($this->do_debug >= 1) {
-        echo "SMTP -> ERROR: " . $this->error["error"] . ": " . $rply . $this->CRLF . '<br />';
+        Log::error("SMTP -> ERROR: " . $this->error["error"] . ": " . $rply . $this->CRLF . '<br />', __METHOD__);
       }
       return false;
     }
@@ -254,7 +254,7 @@ class Util_Smtp {
               "smtp_code" => $code,
               "smtp_msg" => substr($rply,4));
       if($this->do_debug >= 1) {
-        echo "SMTP -> ERROR: " . $this->error["error"] . ": " . $rply . $this->CRLF . '<br />';
+        Log::error("SMTP -> ERROR: " . $this->error["error"] . ": " . $rply . $this->CRLF . '<br />', __METHOD__);
       }
       return false;
     }
@@ -273,7 +273,7 @@ class Util_Smtp {
       if($sock_status["eof"]) {
         // the socket is valid but we are not connected
         if($this->do_debug >= 1) {
-            echo "SMTP -> NOTICE:" . $this->CRLF . "EOF caught while checking if connected";
+            Log::notice("SMTP -> NOTICE:" . $this->CRLF . "EOF caught while checking if connected", __METHOD__);
         }
         $this->Close();
         return false;
@@ -338,7 +338,7 @@ class Util_Smtp {
     $code = substr($rply,0,3);
 
     if($this->do_debug >= 2) {
-      echo "SMTP -> FROM SERVER:" . $rply . $this->CRLF . '<br />';
+      Log::info("SMTP -> FROM SERVER:" . $rply . $this->CRLF . '<br />', __METHOD__);
     }
 
     if($code != 354) {
@@ -347,7 +347,7 @@ class Util_Smtp {
               "smtp_code" => $code,
               "smtp_msg" => substr($rply,4));
       if($this->do_debug >= 1) {
-        echo "SMTP -> ERROR: " . $this->error["error"] . ": " . $rply . $this->CRLF . '<br />';
+        Log::error("SMTP -> ERROR: " . $this->error["error"] . ": " . $rply . $this->CRLF . '<br />', __METHOD__);
       }
       return false;
     }
@@ -432,7 +432,7 @@ class Util_Smtp {
     $code = substr($rply,0,3);
 
     if($this->do_debug >= 2) {
-      echo "SMTP -> FROM SERVER:" . $rply . $this->CRLF . '<br />';
+      Log::info("SMTP -> FROM SERVER:" . $rply . $this->CRLF . '<br />', __METHOD__);
     }
 
     if($code != 250) {
@@ -441,7 +441,7 @@ class Util_Smtp {
               "smtp_code" => $code,
               "smtp_msg" => substr($rply,4));
       if($this->do_debug >= 1) {
-        echo "SMTP -> ERROR: " . $this->error["error"] . ": " . $rply . $this->CRLF . '<br />';
+        Log::error("SMTP -> ERROR: " . $this->error["error"] . ": " . $rply . $this->CRLF . '<br />', __METHOD__);
       }
       return false;
     }
@@ -497,7 +497,7 @@ class Util_Smtp {
     $code = substr($rply,0,3);
 
     if($this->do_debug >= 2) {
-      echo "SMTP -> FROM SERVER: " . $rply . $this->CRLF . '<br />';
+      Log::info("SMTP -> FROM SERVER: " . $rply . $this->CRLF . '<br />', __METHOD__);
     }
 
     if($code != 250) {
@@ -506,7 +506,7 @@ class Util_Smtp {
               "smtp_code" => $code,
               "smtp_msg" => substr($rply,4));
       if($this->do_debug >= 1) {
-        echo "SMTP -> ERROR: " . $this->error["error"] . ": " . $rply . $this->CRLF . '<br />';
+        Log::error("SMTP -> ERROR: " . $this->error["error"] . ": " . $rply . $this->CRLF . '<br />', __METHOD__);
       }
       return false;
     }
@@ -546,7 +546,7 @@ class Util_Smtp {
     $code = substr($rply,0,3);
 
     if($this->do_debug >= 2) {
-      echo "SMTP -> FROM SERVER:" . $rply . $this->CRLF . '<br />';
+      Log::info("SMTP -> FROM SERVER:" . $rply . $this->CRLF . '<br />', __METHOD__);
     }
 
     if($code != 250) {
@@ -555,7 +555,7 @@ class Util_Smtp {
               "smtp_code" => $code,
               "smtp_msg" => substr($rply,4));
       if($this->do_debug >= 1) {
-        echo "SMTP -> ERROR: " . $this->error["error"] . ": " . $rply . $this->CRLF . '<br />';
+        Log::error("SMTP -> ERROR: " . $this->error["error"] . ": " . $rply . $this->CRLF . '<br />', __METHOD__);
       }
       return false;
     }
@@ -589,7 +589,7 @@ class Util_Smtp {
     $byemsg = $this->get_lines();
 
     if($this->do_debug >= 2) {
-      echo "SMTP -> FROM SERVER:" . $byemsg . $this->CRLF . '<br />';
+      Log::info("SMTP -> FROM SERVER:" . $byemsg . $this->CRLF . '<br />', __METHOD__);
     }
 
     $rval = true;
@@ -603,7 +603,7 @@ class Util_Smtp {
                  "smtp_rply" => substr($byemsg,4));
       $rval = false;
       if($this->do_debug >= 1) {
-        echo "SMTP -> ERROR: " . $e["error"] . ": " . $byemsg . $this->CRLF . '<br />';
+        Log::error("SMTP -> ERROR: " . $e["error"] . ": " . $byemsg . $this->CRLF . '<br />', __METHOD__);
       }
     }
 
@@ -641,7 +641,7 @@ class Util_Smtp {
     $code = substr($rply,0,3);
 
     if($this->do_debug >= 2) {
-      echo "SMTP -> FROM SERVER:" . $rply . $this->CRLF . '<br />';
+      Log::info("SMTP -> FROM SERVER:" . $rply . $this->CRLF . '<br />', __METHOD__);
     }
 
     if($code != 250 && $code != 251) {
@@ -650,7 +650,7 @@ class Util_Smtp {
               "smtp_code" => $code,
               "smtp_msg" => substr($rply,4));
       if($this->do_debug >= 1) {
-        echo "SMTP -> ERROR: " . $this->error["error"] . ": " . $rply . $this->CRLF . '<br />';
+        Log::error("SMTP -> ERROR: " . $this->error["error"] . ": " . $rply . $this->CRLF . '<br />', __METHOD__);
       }
       return false;
     }
@@ -684,7 +684,7 @@ class Util_Smtp {
     $code = substr($rply,0,3);
 
     if($this->do_debug >= 2) {
-      echo "SMTP -> FROM SERVER:" . $rply . $this->CRLF . '<br />';
+      Log::info("SMTP -> FROM SERVER:" . $rply . $this->CRLF . '<br />', __METHOD__);
     }
 
     if($code != 250) {
@@ -693,7 +693,7 @@ class Util_Smtp {
               "smtp_code" => $code,
               "smtp_msg" => substr($rply,4));
       if($this->do_debug >= 1) {
-        echo "SMTP -> ERROR: " . $this->error["error"] . ": " . $rply . $this->CRLF . '<br />';
+        Log::error("SMTP -> ERROR: " . $this->error["error"] . ": " . $rply . $this->CRLF . '<br />', __METHOD__);
       }
       return false;
     }
@@ -732,7 +732,7 @@ class Util_Smtp {
     $code = substr($rply,0,3);
 
     if($this->do_debug >= 2) {
-      echo "SMTP -> FROM SERVER:" . $rply . $this->CRLF . '<br />';
+      Log::info("SMTP -> FROM SERVER:" . $rply . $this->CRLF . '<br />', __METHOD__);
     }
 
     if($code != 250) {
@@ -741,7 +741,7 @@ class Util_Smtp {
               "smtp_code" => $code,
               "smtp_msg" => substr($rply,4));
       if($this->do_debug >= 1) {
-        echo "SMTP -> ERROR: " . $this->error["error"] . ": " . $rply . $this->CRLF . '<br />';
+        Log::error("SMTP -> ERROR: " . $this->error["error"] . ": " . $rply . $this->CRLF . '<br />', __METHOD__);
       }
       return false;
     }
@@ -765,7 +765,7 @@ class Util_Smtp {
     $this->error = array("error" => "This method, TURN, of the SMTP ".
                                     "is not implemented");
     if($this->do_debug >= 1) {
-      echo "SMTP -> NOTICE: " . $this->error["error"] . $this->CRLF . '<br />';
+      Log::notice("SMTP -> NOTICE: " . $this->error["error"] . $this->CRLF . '<br />', __METHOD__);
     }
     return false;
   }
@@ -796,12 +796,12 @@ class Util_Smtp {
     $data = "";
     while($str = @fgets($this->smtp_conn,515)) {
       if($this->do_debug >= 4) {
-        echo "SMTP -> get_lines(): \$data was \"$data\"" . $this->CRLF . '<br />';
-        echo "SMTP -> get_lines(): \$str is \"$str\"" . $this->CRLF . '<br />';
+        Log::info("SMTP -> get_lines(): \$data was \"$data\"" . $this->CRLF . '<br />', __METHOD__);
+        Log::info("SMTP -> get_lines(): \$str is \"$str\"" . $this->CRLF . '<br />', __METHOD__);
       }
       $data .= $str;
       if($this->do_debug >= 4) {
-        echo "SMTP -> get_lines(): \$data is \"$data\"" . $this->CRLF . '<br />';
+        Log::info("SMTP -> get_lines(): \$data is \"$data\"" . $this->CRLF . '<br />', __METHOD__);
       }
       // if 4th character is a space, we are done reading, break the loop
       if(substr($str,3,1) == " ") { break; }
@@ -811,4 +811,4 @@ class Util_Smtp {
 
 }
 
-?>
+

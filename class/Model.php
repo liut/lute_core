@@ -36,6 +36,11 @@ abstract class Model implements ArrayAccess, Serializable, JsonSerializable
 	protected static $_editables = [];
 
 	/**
+	 * @var  array  sortable fields
+	 */
+	protected static $_sortables = ['id'];
+
+	/**
 	 * @var  array  for api UI (like JSON) model keys
 	 */
 	//protected static $_api_keys;
@@ -53,7 +58,7 @@ abstract class Model implements ArrayAccess, Serializable, JsonSerializable
 	/**
 	 * @var array $_rules filter rules
 	 */
-	protected static $_rules = [];
+	// protected static $_v_rules = [];
 
 	/**
 	 * @var array $_hooks
@@ -118,6 +123,13 @@ abstract class Model implements ArrayAccess, Serializable, JsonSerializable
 	public static function table($suffix = NULL)
 	{
 		$class = get_called_class();
+		if (is_array($suffix)) {
+			if (isset(static::$_table_depend) && isset($suffix[static::$_table_depend]) && is_scalar($suffix[static::$_table_depend])) {
+				$suffix = $suffix[static::$_table_depend];
+			} elseif (isset($suffix['suffix'])) {
+				$suffix = $suffix['suffix'];
+			}
+		}
 		if (is_string($suffix) && $suffix !== '' || is_int($suffix) && $suffix > 0) {
 			if (isset(static::$_lang_tables) && isset(static::$_lang_tables[$suffix])) {
 				return static::$_lang_tables[$suffix];
@@ -357,7 +369,7 @@ abstract class Model implements ArrayAccess, Serializable, JsonSerializable
 		}
 
 		if (count($ids) > 99) {
-			Log::notice($ids, __METHOD__ . ' too much ids');
+			Log::notice($ids, get_called_class() . '::_loads too much ids');
 			$ids = array_slice($ids, 0, 99);
 		}
 
@@ -424,25 +436,35 @@ abstract class Model implements ArrayAccess, Serializable, JsonSerializable
 	}
 
 	/**
-	 * 钩子: 准备Find之前执行.
+	 * hook: 准备Find之前执行.
 	 *
 	 * @param   array  $option  find arguments
-	 * @return  array
+	 * @return  void
 	 */
-	protected static function preFind(& $option)
+	protected static function preFind(array & $option)
 	{
-		return $option;
 	}
 
 	/**
-	 * 钩子: Find结果返回前执行.
+	 * hook: Find结果返回前执行.
 	 *
-	 * @param   array|null	$result	the result array or null when there was no result
+	 * @param   array	$result	the result array or null when there was no result
 	 * @return  array|null
 	 */
-	protected static function postFind(& $result)
+	protected static function postFind(array $result)
 	{
 		return $result;
+	}
+
+	/**
+	 * hook: 构造Where条件.
+	 *
+	 * @param   array	$option['where'] for findPage argument
+	 * @return  array | mixed
+	 */
+	protected static function pageCondition(array $cond)
+	{
+		return isset($cond['where']) ? $cond['where'] : $cond;
 	}
 
 	/**
@@ -455,7 +477,7 @@ abstract class Model implements ArrayAccess, Serializable, JsonSerializable
 	public static function findByPk($id, $pk = NULL)
 	{
 		if (empty($id)) {
-			throw new InvalidArgumentException("Invalid argument: empty id", 10404);
+			throw new InvalidArgumentException("Invalid argument: empty id ($pk)", 10404);
 		}
 
 		is_null($pk) && $pk = static::primaryKey();
@@ -513,19 +535,41 @@ abstract class Model implements ArrayAccess, Serializable, JsonSerializable
 			throw new InvalidArgumentException('option is empty');
 		}
 
+		Log::info($option, get_called_class().'::find');
+
 		if (!isset($option['fetch']) || $option['fetch'] == 'all' || $option['fetch'] == 'row' || $option['fetch'] == 'fold' ) {
-			$option = static::preFind($option);
+			static::preFind($option);
 		}
 
-		$table = isset($option['table']) ? $option['table'] : (isset($option['lang']) ? static::table($option['lang']) : static::table());
+		$table = isset($option['table']) ? $option['table'] : (isset($option['lang']) ? static::table($option['lang']) : static::table($option));
 
-		$where = isset($option['where']) ? $option['where'] : array();
+		$where = isset($option['where']) ? $option['where'] : [];
 
 		$columns = isset($option['columns']) ? $option['columns'] : '*';
+
+		if (isset($option['sort_name']) ) {
+			if (static::sortable($option['sort_name'])) {
+				if ($option['sort_name'] == 'random') {
+					if (!isset($option['limit'])) {
+						$option['limit'] = 5;
+					}
+					return static::findRandom($table, $columns, $where, $option['limit']);
+				}
+				if (isset($option['sort_order']) && in_array(strtoupper($option['sort_order']), ['ASC', 'DESC'])) {
+					$option['order_by'] = $option['sort_name'] . ' ' . strtoupper($option['sort_order']);
+				} else {
+					$option['order_by'] = $option['sort_name'];
+				}
+			}
+			unset($option['sort_order'], $option['sort_name']);
+		}
 
 		unset($option['where'], $option['columns'], $option['table']);
 
 		$result = Da_Wrapper::select(static::db(), $table, $where, $columns, $option);
+		if (!is_array($result)) {
+			return $result;
+		}
 		if (!isset($option['fetch']) || $option['fetch'] == 'all' || $option['fetch'] == 'fold') {
 			return static::postFind($result);
 		}
@@ -555,7 +599,7 @@ abstract class Model implements ArrayAccess, Serializable, JsonSerializable
 	 *
 	 * @param   array   Query where clause(s)
 	 * @param   string  Column to count by
-	 * @param   bool	Whether to count only distinct rows (by column)
+	 * @param   mixed	Whether to count only distinct rows (by column) or array option
 	 * @return  int	 The number of rows OR false
 	 */
 	public static function count(array $where = array(), $column = NULL, $distinct = FALSE)
@@ -566,14 +610,22 @@ abstract class Model implements ArrayAccess, Serializable, JsonSerializable
 
 		if (is_array($distinct)) {
 			$option = $distinct;
-			$table = isset($option['table']) ? $option['table'] : (isset($option['lang']) ? static::table($option['lang']) : static::table());
-			$distinct = isset($option['distinct']) && $option['distinct'];
 		} else {
-			$table = static::table();
-			is_null($column) && $column = static::primaryKey();
+			$option = ['distinct' => (bool)$distinct];
 		}
 
-		return static::dao()->count($table, $where, $column, $distinct);
+		is_null($column) && $column = static::primaryKey();
+
+		if (!isset($option['where'])) {
+			$option['where'] = $where;
+		}
+
+		static::preFind($option);
+
+		$table = isset($option['table']) ? $option['table'] : (isset($option['lang']) ? static::table($option['lang']) : static::table($option));
+		$distinct = isset($option['distinct']) && $option['distinct'];
+
+		return static::dao()->count($table, $option['where'], $column, $distinct);
 	}
 
 	/**
@@ -600,15 +652,99 @@ abstract class Model implements ArrayAccess, Serializable, JsonSerializable
 	 * @param int &$total
 	 * @return mixed  result
 	 */
-	public static function findPage($option = array(), $limit = NULL, $offset = 0, & $total = NULL)
+	public static function findPage(array $option, $limit, $offset = 0, & $total = NULL)
 	{
-		$where = isset($option['where']) ? $option['where'] : array();
-		if ($total === -1) {
-			$total = static::count($where, '*');
+		if ($limit <= 0) {
+			throw new InvalidArgumentException("invalid limit argument");
 		}
-		$option = array_merge($option, array('limit' => $limit, 'offset' => $offset));
+
+		if (isset($option['where'])) {
+			$option['where'] = static::pageCondition($option['where']);
+		}
+
+		if ($total === -1) {
+			$total = static::count(isset($option['where']) ? $option['where'] : [], NULL);
+		}
+
+		$option['limit'] = (int)$limit;
+		$option['offset'] = (int)$offset;
 
 		return static::find($option);
+	}
+
+	/**
+	 * 返回随机集合
+	 *
+	 * @param string $table
+	 * @param string $columns
+	 * @param array $condition
+	 * @param int $limit
+	 * @return array
+	 * @author liut
+	 **/
+	public static function findRandom($table, $columns, array $where, $limit = 5)
+	{
+		$total = static::count($where, NULL);
+
+		if ($limit < 1) {
+			$limit = 1;
+		}
+
+		if ($total <= $limit) { // 总数小于分页时
+			$result = Da_Wrapper::select(static::db(), $table, $where, $columns, ['fetch' => 'all']);
+			if (!is_array($result) || empty($result)) {
+				return $result;
+			}
+			shuffle($result);
+			return static::postFind($result);
+		}
+
+		$params = [];
+		if (count($where) > 0) {
+			$sql_where = ' WHERE ' . Da_PDO::buildCondition($where, $params);
+		} else {
+			$sql_where = '';
+		}
+
+		$series = $limit * 4;
+
+		$buffer = $limit * 25;
+
+		if ($buffer < $series) {
+			$buffer = $series;
+		}
+
+		$dbo = static::dao();
+		$row = $dbo->getRow('SELECT MIN(id) as min_id, MAX(id) as max_id FROM '.$table.' '.$sql_where, $params);
+		if (!$row) {
+			return FALSE;
+		}
+		$min_id = (int)$row['min_id'];
+		$max_id = (int)$row['max_id'];
+
+		$format = <<< 'EOT'
+SELECT %s
+FROM  (
+	SELECT %d + floor(random() * %d)::integer AS id
+	FROM generate_series(1, %d) g GROUP BY 1
+) r
+JOIN %s USING (id) %s
+LIMIT %d;
+EOT;
+
+		$sql = sprintf($format
+			, $columns
+			, $min_id
+			, ($max_id - $min_id + $buffer)
+			, $series
+			, $table
+			, $sql_where
+			, $limit);
+
+		Log::info($params, get_called_class().' findRandom '.$sql);
+		$data = $dbo->getAll($sql, $params);
+
+		return static::postFind($data);
 	}
 
 	/**
@@ -634,29 +770,53 @@ abstract class Model implements ArrayAccess, Serializable, JsonSerializable
 	 */
 	public static function doDelete(Array $cond)
 	{
+		if (empty($cond)) {
+			return FALSE;
+		}
+
 		return Da_Wrapper::delete(static::db(), static::table(), $cond);
 	}
 
-	public static function filter($key = NULL, $filter = NULL)
+	/**
+	 *
+	 * @return Validation
+	 */
+	public static function validation()
 	{
-		if (is_null($key)) {
-			return static::$_rules;
+		$val = Validation::farm(get_called_class());
+		if (isset(static::$_v_rules) && is_array(static::$_v_rules)) {
+			$labels = isset(static::$_v_labels) ? static::$_v_labels : [];
+			foreach (static::$_v_rules as $key => $rules) {
+				$label = isset($labels[$key]) ? $labels[$key] : ucfirst($key);
+				$val->add($key, $label, $rules);
+			}
+			return $val;
 		}
 
-		if (is_string($key)) {
-			static::$_rules[$key] = $filter;
+		return static::customFilter($val);
+	}
+
+	/**
+	 * hook: 定制验证规则
+	 * @param Validation $val
+	 */
+	protected static function customFilter(Validation $val)
+	{
+		return $val;
+	}
+
+	/**
+	 *
+	 * @param array $input, 输入值，例如：$_POST
+	 */
+	public static function validate(array $input)
+	{
+		$val = static::validation();
+		if ($val->run($input)) {
+			return TRUE;
 		}
 
-	}
-
-	public static function validate($key, $value = NULL)
-	{
-		// TODO: validate
-	}
-
-	public static function sanitize($key, $value = NULL)
-	{
-		// TODO: sanitize
+		return $val->error();
 	}
 
 	// protected vars
@@ -692,7 +852,7 @@ abstract class Model implements ArrayAccess, Serializable, JsonSerializable
 	protected function init($data, $option = NULL)
 	{
 		if (!is_null($option) && !is_scalar($option) && !is_array($option)) {
-			throw new InvalidArgumentException('second argument error: invalid option value');
+			throw new InvalidArgumentException('second argument error: invalid option value type');
 		}
 
 		if (!(is_null($data) || is_array($data) || is_scalar($data) || is_object($data))) {
@@ -707,20 +867,22 @@ abstract class Model implements ArrayAccess, Serializable, JsonSerializable
 		}
 
 		isset($pk) || $pk = static::primaryKey();
-		isset($lang) || $lang = NULL; // 默认查询主表
 
 		if (is_array($data)) {
 			$this->_init($data);
 			$this->_is_new = TRUE;
 		}
 		elseif ($data) {
-			isset($suffix) || $suffix = $data;
-			$row = static::find([
+			$option = [
 				'where' => [$pk => $data],
-				'table' => $lang ? static::table($lang) : static::table($suffix),
+				// 'table' => $lang ? static::table($lang) : static::table($suffix),
 				'fetch' => 'row',
 				'limit' => 1
-			]);
+			];
+			isset($lang) && $option['lang'] = $lang;
+			isset($suffix) && $option['suffix'] = $suffix;
+
+			$row = static::find($option);
 			if ($row === FALSE) { // 不存在的记录，但提供了有效主键，当作新记录，此策略暂定
 				$row = [$pk => $data];
 				$this->_is_new = TRUE;
@@ -730,7 +892,7 @@ abstract class Model implements ArrayAccess, Serializable, JsonSerializable
 				$this->_init($row);
 			}
 			else {
-				Log::info('row error or not found '.$pk.'='.$data, __METHOD__);
+				Log::info('row error or not found '.$pk.'='.$data, get_called_class().' init');
 			}
 		}
 		// otherwise: NULL
@@ -1042,7 +1204,7 @@ abstract class Model implements ArrayAccess, Serializable, JsonSerializable
 		if ($this->isNew()) {
 			$row = $this->_getData();
 
-			Log::info($row, __METHOD__ . ' new');
+			Log::info($row, get_called_class() . '::save new');
 
 			$pre_ret = NULL;
 			if (static::bind('before_insert')) {
@@ -1059,16 +1221,17 @@ abstract class Model implements ArrayAccess, Serializable, JsonSerializable
 				return $pre_ret;
 			}
 
-			$dbo = Da_Wrapper::dbo(static::db());
+			$dbo = static::dao();
 			// TODO: 是否需要在插入前检查同主键是否已存在，暂未决
 			$dbo->begin();
 			static::_stripRelated($row, $related);
-			$opt = isset(static::$_save_ret_id) ? ['ret_id' => static::$_save_ret_id] : [];
+			$opt = 'id' === $pk ? ['ret_id' => static::$_primary_key] : [];
 			$ret = $dbo->insert(static::table($this->tableValue()), $row, $opt);
 
 			if (!$valid && (is_int($ret) || is_string($ret) && !empty($ret))) {
 				$this->_innerSet($pk, $ret);
 				//$this->_key = $this->getKey();
+				Log::info($ret, get_called_class() . ' new '.$pk);
 			}
 			if ($ret) {
 				if (static::bind('after_insert')) {
@@ -1084,7 +1247,7 @@ abstract class Model implements ArrayAccess, Serializable, JsonSerializable
 		}
 
 		if (!$valid) {
-			Log::warning('invalid model object ' . get_called_class(), __METHOD__);
+			Log::warning('invalid model object ', get_called_class() . '::save');
 			return FALSE;
 		}
 
@@ -1094,7 +1257,7 @@ abstract class Model implements ArrayAccess, Serializable, JsonSerializable
 
 		$id = $this->__get($pk);
 		if (is_array($row) && count($row) > 0) {
-			Log::info($row, __METHOD__ . ' change');
+			Log::info($row, get_called_class() . '::save change');
 
 			$pre_ret = NULL;
 			if (static::bind('before_update')) {
@@ -1111,7 +1274,7 @@ abstract class Model implements ArrayAccess, Serializable, JsonSerializable
 				return $pre_ret;
 			}
 
-			$dbo = Da_Wrapper::dbo(static::db());
+			$dbo = static::dao();
 			//$dbo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 			$dbo->begin();
 			//$sql = "UPDATE " . static::table() . " SET ".implode('=?,',array_keys($row)).'=? WHERE ' . $pk . ' = ?';
@@ -1134,7 +1297,7 @@ abstract class Model implements ArrayAccess, Serializable, JsonSerializable
 		}
 
 		// unchange or nothing to save
-		Log::info('unchange ' . get_called_class(), __METHOD__);
+		Log::info('unchange ', get_called_class() . '::save');
 		return -1;
 
 	}
@@ -1177,6 +1340,19 @@ abstract class Model implements ArrayAccess, Serializable, JsonSerializable
 	{
 		if (is_null($name)) return static::$_editables;
 		if (is_string($name)) return in_array($name, static::$_editables);
+		return FALSE;
+	}
+
+	/**
+	 * 检查某个字段是否可排序
+	 *
+	 * @param string $name
+	 * @return void
+	 */
+	public static function sortable($name = NULL)
+	{
+		if (is_null($name)) return static::$_sortables;
+		if (is_string($name)) return in_array($name, static::$_sortables);
 		return FALSE;
 	}
 
@@ -1273,10 +1449,10 @@ abstract class Model implements ArrayAccess, Serializable, JsonSerializable
 	public function __toString()
 	{
 		if($this->__isset('name')) {
-			return $this->__get('name');
+			return (string)$this->__get('name');
 		}
 		if ($this->isValid()) {
-			return $this->getKey();
+			return (string)$this->getKey();
 		}
 		return '';
 	}
@@ -1292,7 +1468,8 @@ abstract class Model implements ArrayAccess, Serializable, JsonSerializable
 	public function toString($format = '')
 	{
 		if (empty($format)) {
-			return json_encode($this, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+			return print_r($this->_data, TRUE);
+			// return json_encode($this, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 		} else {
 			preg_match_all('/(\{\{[a-z0-9_]+\}\})/is', $format, $matches);
 			$arr = [];

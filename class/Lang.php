@@ -69,7 +69,7 @@ class Lang
 		if (in_array($language, static::$available)) {
 			static::$current = $language;
 		} else {
-			throw new InvalidArgumentException('Invalid language');
+			throw new InvalidArgumentException('Invalid language `'.$language.'`');
 		}
 	}
 
@@ -182,13 +182,14 @@ class Lang
 
 					if (is_array($_lang) && !empty($_lang)) {
 						$lang = array_merge($lang, $_lang);
-						Log::debug(' ' . $name . ' loaded ' . count($_lang) . ' from ' . Loader::safePath($path), __METHOD__);
+						// Log::debug(' ' . $name . ' loaded ' . count($_lang) . ' from ' . Loader::safePath($path), __METHOD__);
 						break;
-					} else {
-						if (strpos($file, '.') === FALSE) {
-							Log::info(Loader::safePath($path) . DS . $name . ' not found', __METHOD__);
-						}
 					}
+					// else {
+					// 	if (strpos($file, '.') === FALSE) {
+					// 		Log::info(Loader::safePath($path) . DS . $name . ' not found', __METHOD__);
+					// 	}
+					// }
 
 					unset($_lang);
 				}
@@ -199,7 +200,7 @@ class Lang
 			}
 
 			if (empty($lang)) {
-				Log::notice(' lang ' . $language . ', file ' . $file . ' not found', __METHOD__);
+				Log::notice('lang: ' . $language . ', file: ' . $file . ' not found', __METHOD__);
 			}
 
 			static::$loaded[$file] = count($lang);
@@ -383,4 +384,18 @@ CONF;
 		return static::$lines;
 	}
 
-} // END class 
+	public static function label($lang)
+	{
+		static $languages = NULL;
+		if (is_null($languages)) {
+			$languages = Loader::config('languages');
+		}
+
+		if (isset($languages[$lang])) {
+			return $languages[$lang];
+		}
+
+		return $lang;
+	}
+
+} // END class

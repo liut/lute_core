@@ -20,7 +20,6 @@ class Storage_Entry
 	private $_info;
 	public $meta;
 	public $ext;
-	protected $_exif_data = NULL;
 
 
 	/**
@@ -131,19 +130,6 @@ class Storage_Entry
 
 			$this->size = filesize($file);
 		}
-	}
-
-	public function getExifData()
-	{
-		if ($this->_exif_data === NULL) {
-			if (!$this->isImage() || !function_exists('exif_read_data')) {
-				return FALSE;
-			}
-
-			$this->_exif_data = exif_read_data($this->tmp_name);
-		}
-
-		return $this->_exif_data;
 	}
 
 } // END class 

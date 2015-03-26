@@ -66,6 +66,7 @@ class View_Smarty extends Smarty implements View_Interface
 	{
 		//Smarty 3 !
 		parent::__construct();
+		Log::info($opt, __METHOD__);
 
 		if (is_string($opt) && $opt) {
 			$this->_lang = $opt;
@@ -74,7 +75,7 @@ class View_Smarty extends Smarty implements View_Interface
 			$this->_lang = $opt['lang'];
 		}
 
-		$this->bind('LANG', $this->_lang);
+		$this->assign('LANG', $this->_lang == 'uk' ? 'en' : $this->_lang);
 
 		if (defined('VIEW_SKINS_ROOT') && defined('VIEW_SKIN_DEFAULT')) {
 			$this->_tpl_root = VIEW_SKINS_ROOT;
@@ -100,14 +101,17 @@ class View_Smarty extends Smarty implements View_Interface
 		}
 
 		$this->_cust_compile_dir = defined('VIEW_COMPILE_DIR') ? VIEW_COMPILE_DIR : $this->getComplieDir();
+		if ('cli' === PHP_SAPI) {
+			$this->_cust_compile_dir .= '_cli';
+		}
 
 		if ($this->_lang) {
 			$this->setCompileDir($this->_cust_compile_dir . DS . $this->_lang);
 		}
 		else $this->setCompileDir($this->_cust_compile_dir);
-		
+
 		defined('VIEW_CONFIG_DIR') && $this->setConfigDir(VIEW_CONFIG_DIR);
-		
+
 		$this->addPluginsDir(LIB_ROOT.'function/smarty/plugins');
 
 		if (defined('VIEW_SMARTY_HELPER')) {
@@ -127,10 +131,10 @@ class View_Smarty extends Smarty implements View_Interface
 	{
 		$this->assignByRef($key, $value);
 	}
-	
+
 	/**
 	 * 设置页面标题
-	 * 
+	 *
 	 * @param string $title
 	 * @return void
 	 */
@@ -138,10 +142,10 @@ class View_Smarty extends Smarty implements View_Interface
 	{
 		$this->bind('head_title', $title);
 	}
-	
+
 	/**
 	 * function description
-	 * 
+	 *
 	 * @param string $kw
 	 * @return void
 	 */

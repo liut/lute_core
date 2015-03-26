@@ -11,7 +11,7 @@ class Validation
 {
 
 	/**
-	 * 
+	 *
 	 * @param array $rules
 	 * @return self
 	 */
@@ -61,9 +61,9 @@ class Validation
 
 	/**
 	 * constructor
-	 * 
+	 *
 	 * @param array
-	 * 
+	 *
 	 */
 	protected function __construct()
 	{
@@ -120,7 +120,7 @@ class Validation
 	 * when input wasn't given.
 	 *
 	 * @param   array  input that overwrites POST values
-	 * 
+	 *
 	 * @return  bool   whether validation succeeded
 	 */
 	public function run($input = NULL, $allow_partial = false)
@@ -602,10 +602,31 @@ class Validation
 		$pattern .= in_array('dots', $flags) && ! in_array('punctuation', $flags) ? '\.' : '';
 		$pattern .= in_array('punctuation', $flags) ? "\.,\!\?:;\&" : '';
 		$pattern .= in_array('dashes', $flags) ? '_\-' : '';
+		$pattern .= in_array('solidus', $flags) ? '\/' : '';
 		$pattern = empty($pattern) ? '/^(.*)$/' : ('/^(['.$pattern.'])+$/');
 		$pattern .= in_array('utf8', $flags) ? 'u' : '';
 
 		return preg_match($pattern, $val) > 0;
+	}
+
+	/**
+	 * Validate float use filter_var
+	 *
+	 * @param   string
+	 * @param   string|array  either a named filter or combination of flags
+	 * @return  bool
+	 */
+	public function _validate_valid_float($val, $flags = ['money', 'thousand'])
+	{
+		if ($this->_empty($val)) {
+			return TRUE;
+		}
+
+		$v_flags = 0;
+		// if (in_array('fraction', $flags)) $v_flags |= FILTER_FLAG_ALLOW_FRACTION;
+		if (in_array('thousand', $flags)) $v_flags |= FILTER_FLAG_ALLOW_THOUSAND;
+
+		return filter_var($val, FILTER_VALIDATE_FLOAT, ['options' => ['decimal' => '.'], 'flags' => $v_flags]);
 	}
 
 	/**
@@ -668,7 +689,7 @@ class Validation_Field
 	 * @param  string $name
 	 * @param  string $label
 	 * @param  array $rules
-	 * 
+	 *
 	 */
 	public function __construct($name, $label = '', array $rules = [])
 	{
@@ -736,17 +757,15 @@ class Validation_Field
 } // END class
 
 
-Validation_Error::init();
-
 /**
  * Validation error
  *
  * Contains all the information about a validation error
  *
  * @package   core
- * 
+ *
  */
-class Validation_Error extends Exception
+class Validation_Error extends Exception implements JsonSerializable
 {
 	public static function init()
 	{
@@ -793,6 +812,16 @@ class Validation_Error extends Exception
 		$this->value   = $value;
 		$this->params  = $params;
 		$this->rule    = key($callback);
+	}
+
+	public function jsonSerialize()
+	{
+		return [
+			'field' => $this->field,
+			'message' => $this->message(),
+			'rule' => $this->rule,
+			'value' => $this->value
+		];
 	}
 
 	/**
@@ -874,3 +903,5 @@ class Validation_Error extends Exception
 	}
 
 } // END class
+
+Validation_Error::init();

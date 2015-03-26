@@ -156,21 +156,26 @@ class Request
 	 * Alias to __get, but support filter sanitize
 	 *
 	 * @param string $key
-	 * @param string $filter filter name: string,stripped,encoded,special_chars,email,url,number_int,number_float,magic_quotes...
+	 * @param string $fname filter name: string,stripped,encoded,special_chars,email,url,number_int,number_float,magic_quotes...
 	 * @param mixed $default
 	 * @return mixed
 	 */
-	public function get($key, $filter = NULL, $default = NULL)
+	public function get($key, $fname = NULL, $default = NULL)
 	{
-		if ($filter !== NULL) {
-			$f_opt = filter_id($filter);//'FILTER_SANITIZE_'.strtoupper($filter);
-			if ($f_opt != FALSE) {
+		if ($fname !== NULL) {
+			$fid = filter_id($fname);
+			if ($fid != FALSE) {
+				$fopt = ['options' => ['default' => $default]];
+				if ($fid === FILTER_SANITIZE_NUMBER_FLOAT) {
+					$fopt['flags'] = FILTER_FLAG_ALLOW_FRACTION;
+				}
+
 				if (filter_has_var(INPUT_POST, $key)) {
-					return filter_input(INPUT_POST, $key, $f_opt);
+					return filter_input(INPUT_POST, $key, $fid, $fopt);
 				}
 
 				if (filter_has_var(INPUT_GET, $key)) {
-					return filter_input(INPUT_GET, $key, $f_opt);
+					return filter_input(INPUT_GET, $key, $fid, $fopt);
 				}
 
 				return $default;
@@ -231,6 +236,19 @@ class Request
 	}
 
 	/**
+	 * set current user
+	 *
+	 * @return void
+	 * @author
+	 **/
+	public function setUser($user)
+	{
+		if (is_object($user)) {
+			$this->_user = $user;
+		}
+	}
+
+	/**
 	 * 设置用户属性调用方法
 	 *
 	 * @param mixed $callable
@@ -268,7 +286,9 @@ class Request
 	public function isJson()
 	{
 		if (is_null($this->_is_json)) {
-			$this->_is_json = ($this->EXT === 'json' || $this->hasAccept('application/json'));
+			$this->_is_json = ($this->EXT === 'json'
+				 || $this->hasAccept('application/json')
+				 || $this->get('format', 'string') === 'json');
 		}
 
 		return $this->_is_json;
@@ -276,7 +296,7 @@ class Request
 
 	public function isJs()
 	{
-		return $this->EXT === 'js';
+		return $this->EXT === 'js' || $this->get('format', 'string') === 'json';
 	}
 
 	public function isXml()
@@ -631,7 +651,8 @@ class Request
 			$available = [$available];
 		}
 
-		$force_lang = $this->__get('lang');
+		$force_lang = strtolower($this->lang);
+		$force_lang = strtr($force_lang, '_', '-');
 
 		if (in_array($force_lang, $available)) {
 			return $force_lang;
@@ -639,18 +660,86 @@ class Request
 
 		$langs = $this->getLangs();
 
-		foreach ($langs as $lang => $w) {
-			if (strpos($lang, '-') === 2) {
-				$lang = substr($lang, 0, 2);
+		foreach ($langs as $lang => $weight) {
+			$lang = strtolower($lang);
+			$lang = strtr($lang, '_', '-');
+			if ('zh-cn' === $lang || 'zh' === $lang) {
+				$lang = 'zh-hans';
+			}
+			elseif ('zh-tw' === $lang) {
+				$lang = 'zh-hant';
 			}
 			if (in_array($lang, $available)) {
 				return $lang;
 			}
+
+			if (strpos($lang, '-') === 2) {
+				$lang = substr($lang, 0, 2);
+				if (in_array($lang, $available)) {
+					return $lang;
+				}
+			}
 		}
 
 		// default
-		return defined('LANG_FALLBACK') ? LANG_FALLBACK : NULL;
+		return defined('LANG_FALLBACK') ? LANG_FALLBACK : 'en';
 
+	}
+
+	public function getBrowser()
+	{
+		$agent = $this->CLIENT_AGENT;
+
+	   if(preg_match("|(myie[^;^)^(]*)|i",$agent,$matches))  //MyIE
+			return $matches[1];
+	   if(preg_match("|(Netscape[^;^)^(]*)|i",$agent,$matches))//网景
+			return $matches[1];
+	   if(preg_match("|(Opera[^;^)^(]*)|i",$agent,$matches))//Opera
+			return $matches[1];
+	   if(preg_match("|(NetCaptor[^;^^()]*)|i",$agent,$matches))
+			return $matches[1];
+	   if(preg_match("|(TencentTraveler)|i",$agent,$matches)) //腾讯浏览器
+			return $matches[1];
+	   if(preg_match("|(Firefox[0-9/\.^)^(]*)|i",$agent,$matches))
+			return $matches[1];
+	   if(preg_match("|(Lynx[^;^)^(]*)|i",$agent,$matches))
+			return $matches[1];
+	   if(preg_match("|(Konqueror[^;^)^(]*)|i",$agent,$matches))
+			return $matches[1];
+	   if(preg_match("|(WebTV[^;^)^(]*)|i",$agent,$matches))
+			return $matches[1];
+	   if(preg_match("|(MSIE[^;^)^(]*)|i",$agent,$matches))
+			return $matches[1];
+	   if(preg_match("|(Maxthon[^;^ ^+^)^(]*)|i",$agent,$matches)) //傲游
+			return $matches[1];
+	   if(preg_match("|(Chrome[^ ^)^(]*)|i",$agent,$matches)) //Google浏览器
+			return $matches[1];
+
+		return 'Unknown:'.(strlen($agent)>15 ? substr($agent,0,15) : $agent);
+	}
+
+	public function getOS()
+	{
+		$sys = $this->CLIENT_AGENT;
+		if(stripos($sys, "NT 6.1")) return "Windows 7";
+		if(stripos($sys, "NT 6.0")) return "Windows Vista";
+		if(stripos($sys, "NT 5.1")) return "Windows XP";
+		if(stripos($sys, "NT 5.2")) return "Windows Server 2003";
+		if(stripos($sys, "NT 5")) return "Windows 2000";
+		if(stripos($sys, "NT 4.9")) return "Windows ME";
+		if(stripos($sys, "NT 4")) return "Windows NT 4.0";
+		if(stripos($sys, "98")) return "Windows 98";
+		if(stripos($sys, "95")) return "Windows 95";
+		if(stripos($sys, "Mac")) return "Mac";
+		if(stripos($sys, "Linux")) return "Linux";
+		if(stripos($sys, "Unix")) return "Unix";
+		if(stripos($sys, "FreeBSD")) return "FreeBSD";
+		if(stripos($sys, "SunOS")) return "SunOS";
+		if(stripos($sys, "BeOS")) return "BeOS";
+		if(stripos($sys, "OS/2")) return "OS/2";
+		if(stripos($sys, "PC")) return "Macintosh";
+		if(stripos($sys, "AIX")) return "AIX";
+		return "Unknown";
 	}
 
 	public static function allHttpHeaders()

@@ -4,14 +4,14 @@
  * php_array to pg_hstore
  * pg_hstore to php_array
  *
- * Util_PgHstore
+ * Da_PgHstore
  *
  * @package core
  * @author sundb
  **/
-class Util_PgHstore
+class Da_PgHstore
 {
-    private $_db;
+    private $_db_key;
     /**
      * @param $db_key string
      * @return self
@@ -29,18 +29,19 @@ class Util_PgHstore
      * undocumented function
      *
      * @return void
-     * @author 
+     * @author
      **/
     private function __construct($db_key)
     {
-            $this->_db = Da_Wrapper::dbo($db_key);
+            $this->_db_key = $db_key;
     }
     /***********************************\
     *                                   *
     *     HSTORE: PHP => POSTGRESQL     *
     *                                   *
     \***********************************/
-    public function hstoreFromPhp($php_array, $hstore_array = False) {
+    public function hstoreFromPhp($php_array, $hstore_array = False)
+    {
         if($hstore_array) {
             // Converts a PHP array of Associative Arrays to a PostgreSQL
             // Hstore Array. PostgreSQL Data Type: "hstore[]"
@@ -60,7 +61,8 @@ class Util_PgHstore
         return $pg_hstore;
     }
 
-    private function _hstoreFromPhpHelper(array $php_hstore) {
+    private function _hstoreFromPhpHelper(array $php_hstore)
+    {
         $pg_hstore = array();
 
         foreach ($php_hstore as $key => $val) {
@@ -83,7 +85,8 @@ class Util_PgHstore
     *     HSTORE: POSTGRESQL => PHP     *
     *                                   *
     \***********************************/
-    public function hstoreToPhp($string) {
+    public function hstoreToPhp($string)
+    {
         // If first and last characters are "{" and "}", then we know we're
         // working with an array of Hstores, rather than a single Hstore.
         if(substr($string, 0, 1) == '{' && substr($string, -1, 1) == '}') {
@@ -98,7 +101,8 @@ class Util_PgHstore
         return $hstore_array;
     }
 
-    private function _hstoreToPhpHelper($string) {
+    private function _hstoreToPhpHelper($string)
+    {
         if(!$string || !preg_match_all('/"(.+)(?<!\\\)"=>(NULL|""|".+(?<!\\\)\s*"),?/U', $string, $match, PREG_SET_ORDER)) {
             return array();
         }
@@ -127,12 +131,14 @@ class Util_PgHstore
     *     ARRAY: POSTGRESQL => PHP     *
     *                                  *
     \**********************************/
-    public function arrayToPhp($string, $pg_data_type) {
+    public function arrayToPhp($string, $pg_data_type)
+    {
         if(substr($pg_data_type, -2) != '[]') {
             // PostgreSQL arrays are signified by
             $pg_data_type .= '[]';
         }
-        return $this->_db->getFlat("SELECT UNNEST(" . $this->_db->quote($string) . "::" . $pg_data_type . ") AS value");
+        $dbh = Da_Wrapper::dbo($this->_db_key);
+        return $dbh->getFlat("SELECT UNNEST(" . $dbh->quote($string) . "::" . $pg_data_type . ") AS value");
         // $array_values = array();
 
         // $pos = 0;
@@ -152,7 +158,8 @@ class Util_PgHstore
     *     ARRAY: PHP => POSTGRESQL     *
     *                                  *
     \**********************************/
-    public function arrayFromPhp($array) {
+    public function arrayFromPhp($array)
+    {
         $return = '';
         foreach($array as $array_value) {
             if($return) {

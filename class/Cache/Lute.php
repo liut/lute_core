@@ -26,7 +26,7 @@
  */
 class Cache_Lute extends Cache // implements Cache_Interface //,ArrayAccess
 {
-	protected static $availableOptions = array('cacheDir', 'caching', 'lifeTime', 'debug', 'group', 'fileSuffix', 'serialization', 'idPattern', 'idReplace', 'args_min', 'args_max', 'no_index', 'lang');
+	protected static $availableOptions = array('cacheDir', 'caching', 'lifeTime', 'debug', 'group', 'fileSuffix', 'serialization', 'idPattern', 'idReplace', 'args_min', 'args_max', 'no_index', 'subgroup');
 	protected $_cacheDir = '/tmp/';
 	protected $_fileSuffix = '';
 	protected $_filename = NULL;
@@ -37,7 +37,7 @@ class Cache_Lute extends Cache // implements Cache_Interface //,ArrayAccess
 	/** id的替代操作 */
 	protected $_idReplace = NULL;
 	/** 语言代号 */
-	protected $_lang = NULL;
+	protected $_subgroup = NULL;
 
 	/**
 	 * get
@@ -152,8 +152,8 @@ class Cache_Lute extends Cache // implements Cache_Interface //,ArrayAccess
 		if (!empty($this->_group)) {
 			$_path .= trim(preg_replace("/[^a-z0-9_\-\.\/]/", '', $this->_group), './') . DS;
 		}
-		if (!empty($this->_lang) && ctype_alpha($this->_lang)) {
-			$_path .= $this->_lang . DS;
+		if (!empty($this->_subgroup) && ctype_alpha($this->_subgroup)) {
+			$_path .= $this->_subgroup . DS;
 		}
 		$_ext = $this->_fileSuffix;
 		if (empty($_ext)) {

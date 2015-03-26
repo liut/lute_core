@@ -14,26 +14,24 @@
 
 /**
  * Ticket
- * 
+ *
  */
 class Ticket
 {
 	// const
 	const COOKIE_TSID = '__tkid';
-	const COOKIE_REFS = '_refs';
 	const LIFTIME_TSID = 31536000;	// 3600 * 24 * 365 * 1
-	
+
 	// vars
 	protected $_sid;
-	protected $_ref;
-	
+
 	// vars
 	private $_new = false;
 	private $_ts = 0;
 
 	/**
 	 * constructor
-	 * 
+	 *
 	 * @return void
 	 */
 	private function __construct()
@@ -41,43 +39,43 @@ class Ticket
 		$this->init();
 	}
 
-	protected function init() 
+	protected function init()
 	{
-		$sid = self::lastSid();
+		$sid = static::lastSid();
 		if(empty($sid) || strlen($sid) < 16) {
 			$this->_new = true;
-			$this->_sid = self::storedSid();
+			$this->_sid = static::storedSid();
 		} else {
 			$this->_sid = $sid;
 		}
-		$this->_ts = self::makeTimed($this->_sid);
+		$this->_ts = static::makeTimed($this->_sid);
 	}
 
 	/**
-	 * return current singleton self
-	 * 
+	 * return current singleton static
+	 *
 	 * @return object
 	 */
 	public static function current()
 	{
 		static $_current;
-		if($_current === null) $_current = new self();
+		if($_current === null) $_current = new static();
 		return $_current;
 	}
 
 	/**
 	 * 从Cookie里取得sid或新建sid并设置cookie
-	 * 
+	 *
 	 * @param
 	 * @return void
 	 */
 	public static function storedSid()
 	{
-		$sid = self::lastSid();
+		$sid = static::lastSid();
 		if(empty($sid) || strlen($sid) < 16) {
-			$sid = self::genSid();
-			if(self::isHttp()) {
-				setcookie(self::COOKIE_TSID, $sid, time() + self::LIFTIME_TSID, '/',Request::genCookieDomain());
+			$sid = static::genSid();
+			if(static::isHttp()) {
+				setcookie(static::COOKIE_TSID, $sid, time() + static::LIFTIME_TSID, '/',Request::genCookieDomain());
 			}
 		}
 		return $sid;
@@ -85,17 +83,17 @@ class Ticket
 
 	/**
 	 * get LastSid
-	 * 
+	 *
 	 * @return string
 	 */
 	public static function lastSid()
 	{
-		return isset($_COOKIE[self::COOKIE_TSID]) ? $_COOKIE[self::COOKIE_TSID] : null;;
+		return isset($_COOKIE[static::COOKIE_TSID]) ? $_COOKIE[static::COOKIE_TSID] : null;;
 	}
-	
+
 	/**
 	 * 生成 Tecket_id
-	 * 
+	 *
 	 * @return string
 	 */
 	protected static function genSid()
@@ -105,7 +103,7 @@ class Ticket
 
 	/**
 	 * function description
-	 * 
+	 *
 	 * @param
 	 * @return void
 	 */
@@ -116,10 +114,10 @@ class Ticket
 		if ($name === 'ts' ||  $name === 'timestamp') return $this->_ts;
 		return null;
 	}
-	
+
 	/**
 	 * function description
-	 * 
+	 *
 	 * @param string $sid;
 	 * @return void
 	 */
@@ -128,24 +126,7 @@ class Ticket
 		$t = hexdec(substr($sid, 0,8));
 		return $t;
 	}
-	
-	/**
-	 * 返回已经记录的 refs
-	 * 
-	 * @return array
-	 */
-	public static function referers()
-	{
-		if (isset($_COOKIE[self::COOKIE_REFS])) {
-			$refs = explode('~~', $_COOKIE[self::COOKIE_REFS]);
-			if (is_array($refs) && count($refs) > 3) {
-				return $refs;
-			}
-		}
 
-		return array('','','','');
-	}
-	
 	public static function isHttp()
 	{
 		return isset($_SERVER['HTTP_HOST']);
@@ -153,7 +134,7 @@ class Ticket
 
 	/**
 	 * 临时测试
-	 * 
+	 *
 	 * @return void
 	 */
 	public static function testGenSn()
@@ -161,60 +142,78 @@ class Ticket
 		$i = 0;
 		do
 		{
-			$sid = self::genSid();
-			echo $sid, "\t", time(), "\t", self::makeTimed($sid), PHP_EOL;
+			$sid = static::genSid();
+			echo $sid, "\t", time(), "\t", static::makeTimed($sid), PHP_EOL;
 			$i ++;
 		}
 		while ($i < 100);
-		
+
 		return $i;
 	}
 
 	/**
 	 * 根据访问者IP，猜猜是哪儿的地址
-	 * @param mixed ip address or Request instance
+	 *
+	 * '8.8.4.4' => array (
+	 *   'continent_code' => 'NA',
+	 *   'country_code' => 'US',
+	 *   'country_code3' => 'USA',
+	 *   'country_name' => 'United States',
+	 *   'region' => 'CA',
+	 *   'city' => 'Mountain View',
+	 *   'postal_code' => '94043',
+	 *   'latitude' => 37.419200897216797,
+	 *   'longitude' => -122.05740356445312,
+	 *   'dma_code' => 807,
+	 *   'area_code' => 650,
+	 * )
+	 *
+	 * @param mixed ip address
 	 * @return array or FALSE
 	 */
-	public static function guessIp($request = NULL)
+	public static function guessIp($ip)
 	{
-		if (empty($request)) {
-			$request = Request::current();
-		}
-		elseif (is_string($request)) {
-			$ip = $request;
-		}
-
-		if ($request instanceof Request) {
-			$ip = $request->CLIENT_IP;
-		}
-
-		if (!isset($ip)) {
+		if (empty($ip)) {
 			return FALSE;
 		}
 
 		if ($ip == '127.0.0.1') {
 			Log::info('geoip not support loopback ip', __METHOD__);
-			return FALSE;
+			return 'localhost';
 		}
 
-		if (function_exists('geoip_record_by_name')) {
+		if (extension_loaded('geoip')) {
 			try {
-				$record = geoip_record_by_name($ip);
-				if ($record) {
-					$row = [
-						'country' => $record['country_code'],
-						'province' => $record['region'],
-						'city' => $record['city'],
-						'postcode' => $record['postal_code']
-					];
-					Log::info('Guess hit: ' . $ip . ': ' . print_r($record, TRUE), __METHOD__);
-					return $row;
+				$country_code = @geoip_country_code_by_name($ip);
+				if (!$country_code) {
+					return FALSE;
 				}
-				Log::notice('Guess address: no record found: ' . $ip, __METHOD__);
+				$result = [
+					'continent_code' => geoip_continent_code_by_name($ip),
+					'country_code' => $country_code,
+					'country_code3' => geoip_country_code3_by_name($ip),
+					'country_name' => geoip_country_name_by_name($ip),
+				];
+
+				$record = @geoip_record_by_name($ip);
+				if ($record) {
+					Log::info($record, __METHOD__.' Guess hit: ' . $ip);
+					$result = array_merge($result, $record);
+				} else {
+					Log::notice('Guess address: no record found: ' . $ip, __METHOD__);
+				}
+
+				// $org = @geoip_org_by_name($ip);
+				// if ($org) {
+				// 	$result['org'] = $org;
+				// }
+
+				return $result;
 			} catch (Exception $e) {
 				Log::warning($e, __METHOD__);
 			}
 		}
+
 		return FALSE;
 	}
 }

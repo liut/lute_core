@@ -3,7 +3,7 @@
  * 框架装载器
  * 用来初始化和封装基本操作
  *
- * @package	Lib
+ * @package	Core
  * @author	 liut
  * @copyright  2007-2012 liut
  * @version	$Id$
@@ -53,11 +53,12 @@ final class Loader
 	public static function import($dir, $check_dir = FALSE)
 	{
 		if ($check_dir && !is_dir($dir)) {
-			Log::error('dir ' . $dir . ' not found', 'import error');
+			// Log::error('dir ' . $dir . ' not found', 'import error');
 			return;
 		}
 		if (!in_array($dir, self::$_paths)) {
 			array_unshift(self::$_paths, $dir);
+			// echo $dir, ', ';
 		}
 	}
 
@@ -98,7 +99,7 @@ final class Loader
 		}
 
 		$filename = strtr($className, '_\\', '//') . '.php';//str_replace('_', DIRECTORY_SEPARATOR, $className);
-		/*if ($filename != $className) { 
+		/*if ($filename != $className) {
 			$dirname = dirname($filename);
 			foreach ($dirs as $offset => $dir) {
 				if ($dir == '.') {
@@ -119,7 +120,7 @@ final class Loader
 			//throw new Exception(sprintf("Class %s Not Found: %s", $className, $filename));	// 是否抛出异常有争议
 			return false;
 		}
-		
+
 		return $className;
 	}
 
@@ -206,8 +207,8 @@ final class Loader
 	 */
 	public static function init()
 	{
-		if (version_compare(PHP_VERSION, '5.4.0', '<')) {
-			throw new Exception("Error: PHP_VERSION < 5.4", 1);
+		if (PHP_VERSION_ID < 50500) {
+			throw new Exception("Error: PHP_VERSION < 5.5", 1);
 		}
 		static $_inited = false;
 		// 避免重复调用 self::init()
@@ -225,7 +226,7 @@ final class Loader
 		 * 设置异常处理例程
 		 */
 		set_exception_handler(array('Loader', 'printException'));
-		
+
 		return true;
 	}
 
@@ -262,7 +263,7 @@ final class Loader
 
 	/**
 	 * 打印错误的详细信息
-	 * 
+	 *
 	 * @param int $errno
 	 * @param string $errstr
 	 * @return void
@@ -273,7 +274,7 @@ final class Loader
 		if ($error_reporting == 0) {
 			return;
 		}
-		
+
 		if ($error_reporting & $errno) {
 			throw new ErrorException($errstr, 0, $errno, $errfile, $errline);
 		}
@@ -298,8 +299,14 @@ final class Loader
 			//echo $T['function'], PHP_EOL;
 			if($T['function'] != 'include' && $T['function'] != 'require' && $T['function'] != 'include_once' && $T['function'] != 'require_once' && $T['function'] != 'printError') {
 				$out .= "\t" . '<'. self::safePath($T['file']) . ($T['line'] ? '> on line ' . $T['line'] : '');
-				if(isset($T['class']))
+				if(isset($T['class'])) {
 					$out .= ' in method ' . $T['class'] . $T['type'];
+					if ($T['class'] == 'PDO' && $T['function'] == '__construct') {
+						if (isset($T['args']) && isset($T['args'][2])) {
+							$T['args'][2] = '****';
+						}
+					}
+				}
 				else
 					$out .= ' in function ';
 				$out .= $T['function'] . '(';
@@ -379,7 +386,7 @@ EOT;
 
 	/**
 	 * 输出错误信息并中止
-	 * 
+	 *
 	 * @param string $msg
 	 * @param int $code
 	 * @param boolean $end
@@ -406,14 +413,14 @@ EOT;
 			$code = 404;
 		}
 		header("HTTP/1.1 ".$status[$code]);
-		
+
 		if (!empty($msg)) echo $msg;
 		if($end) exit();
 	}
 
 	/**
 	 * 加载配置
-	 * 
+	 *
 	 * @param string $name
 	 * @param array $inject
 	 * @return mixed
@@ -423,8 +430,8 @@ EOT;
 		static $settings = array();
 
 		if(!isset($settings[$name])) {
-			if (!preg_match("#^[a-z][a-z0-9_\.]{1,24}$#i", $name)) {
-				throw new InvalidArgumentException('invalid config name');
+			if (!preg_match("#^[a-z][a-z0-9_\.-]{1,24}$#i", $name)) {
+				throw new InvalidArgumentException('invalid config name: '.$name);
 			}
 
 			if (is_null($dir) && defined('CONF_ROOT')) {
@@ -448,7 +455,7 @@ EOT;
 
 	/**
 	 * 加载配置, 按 name.conf.php -> name.ini -> name.yml 的顺序
-	 * 
+	 *
 	 * @param string $name
 	 * @param string $dir
 	 * @return mixed array or NULL
@@ -492,7 +499,7 @@ EOT;
 
 	/**
 	 * 设置 Http 无缓存输出
-	 * 
+	 *
 	 * @return void
 	 */
 	public static function nocache()

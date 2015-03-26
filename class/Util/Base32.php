@@ -16,7 +16,7 @@
 
 class Util_Base32
 {
-	const ALPHABET = "3456789ABCDEFGHIJKLMNPQRSTUVWXYZ";
+	const ALPHABET = "EDRU3P8NBIWV695ZHK4GQSLJAXFCY7MT";
 
 	public static function encode($int) {
 		$base32_string = "";

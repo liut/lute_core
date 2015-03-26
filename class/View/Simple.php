@@ -24,34 +24,8 @@ class View_Simple implements View_Interface
 	 */
 	public function __construct($file = null, $data = null)
 	{
-		# TODO:
+		// TODO:
 	}
-
-	/**
-	 * assign
-	 */
-	public function assign($key, $value = null)
-	{}
-
-	/**
-	 * bind
-	 *
-	 * @return void
-	 **/
-	public function bind($key, & $value)
-	{}
-
-	/**
-	 *
-	 */
-	public function display($tpl_name)
-	{}
-
-	/**
-	 *
-	 */
-	public function fetch($tpl_name)
-	{}
 }
 
 

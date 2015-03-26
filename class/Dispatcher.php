@@ -12,29 +12,35 @@
  * 	'default_action' => 'index'
  * ])->run();
  *
+ * public properties:
+ * 		request
+ * 		lang
+ * 		controlName()
+ * 		actionName()
+ * 		getParams()
+ *
  */
 class Dispatcher
 {
-	protected static $_config = array(
+	protected static $_config = [
 		'action_prefix' => 'action_',
-		'action_suffix' => '',
 		'before_dispatch' => NULL,
 		'controller_prefix' => 'Controller_',
 		'default_controller' => 'home',
 		'default_action' => 'index',
 		'lang' => NULL,
-		'load_account' => NULL, // 加载 account 类，内容为 callable
+		'account_call' => NULL, // 加载 account 类，内容为 callable
 		'namespace' => '',
 		'request' => NULL,
 		'view_class' => 'View_Smarty',
 		'view' => NULL,
 		'view_ext' => '.htm'
-	);
+	];
 
-	private $control_name;
-	private $action_name;
+	private $_control_name = '';
+	private $_action_name = '';
 
-	private $params;
+	private $_params = [];
 
 	private $_is_api_call = FALSE;
 	/**
@@ -43,6 +49,8 @@ class Dispatcher
 	private $_callback = NULL;
 	private $_wraped = FALSE;
 	private $_cached = FALSE;
+
+	private $_view = NULL;
 
 	/**
 	 * 初始化一个调度实例
@@ -60,10 +68,10 @@ class Dispatcher
 	 * @param array $config
 	 * @return self instance
 	 */
-	public static function farm(array $config = array())
+	public static function farm(array $config = [])
 	{
 		static $_instance = NULL;
-		is_null($_instance) && $_instance = new self($config);
+		is_null($_instance) && $_instance = new static($config);
 		return $_instance;
 	}
 
@@ -81,7 +89,7 @@ class Dispatcher
 	 * @param array $config
 	 * @deprecated by ::farm()->run()
 	 */
-	public static function start(array $config = array())
+	public static function start(array $config = [])
 	{
 		static $_started = FALSE;
 		// 避免重复调用
@@ -115,19 +123,31 @@ class Dispatcher
 		$this->lang && $this->lang = strtolower($this->lang);
 		$this->lang && self::$_config['lang'] = $this->lang;
 
-		$this->control_name = $this->default_controller;
-		$this->action_name = $this->default_action;
+		$this->_is_api_call = $this->request->isApiCall();
 
-		$this->params = [];
+		$this->_callback = $this->request->jsoncallback;
+		if(empty($this->_callback)) {
+			$this->_callback = $this->request->callback;
+		}
 
 		$uri = explode('/', trim($this->request->PATH, '/'));
 
 		if(is_array($uri) and count($uri) > 0){
 			//controller
 			$ctl = array_shift($uri);
+			// add version support
+			if ( defined('SITE_ROOT') && preg_match("#^v\d{1,4}$#i", $ctl)) {
+				$_dir = SITE_ROOT . '_class_' . $ctl;
+				if (is_dir($_dir)) {
+					Loader::import($_dir);
+					unset($_dir);
+					$ctl = array_shift($uri);
+				}
+			}
+
 			if(!empty($ctl)) {
 				if (preg_match("#^[a-z0-9_\.\-]+$#i", $ctl)){ // verify controller name
-					$this->control_name = $ctl;
+					$this->_control_name = $ctl;
 				}
 				else {
 					// try to fix invalid ctl
@@ -148,7 +168,7 @@ class Dispatcher
 						exit;
 					}
 
-					self::out(400, 'invalid controller name');
+					$this->out(400, 'invalid controller name');
 					exit;
 				}
 			}
@@ -156,25 +176,22 @@ class Dispatcher
 			$act = array_shift($uri); // act: NULL, '', '0', strings
 			if(is_string($act) && $act !== ''){ // empty('0') == true in PHP
 				if (ctype_graph($act)){ // verify action name
-					$this->action_name = $act;
+					$this->_action_name = $act;
 				}
 				else {
-					self::out(400, 'invalid action name');
+					$this->out(400, 'invalid action name');
 					exit;
 				}
 			}
 			//整理uri得到的参数
 			// TODO: 待优化
 			foreach($uri as $k => $v){
-				$this->params[] = $v;
+				$this->_params[] = $v;
 			}
 		}
 
-		$this->_is_api_call = $this->request->isApiCall();
-
-		$this->_callback = $this->request->jsoncallback;
-		if(empty($this->_callback)) {
-			$this->_callback = $this->request->callback;
+		if ($this->account_call && is_callable($this->account_call)) {
+			$this->request->setUserCall($this->account_call);
 		}
 
 	}
@@ -184,7 +201,7 @@ class Dispatcher
 	 */
 	public function controllerName()
 	{
-		return $this->control_name;
+		return $this->_control_name;
 	}
 
 	/**
@@ -192,16 +209,24 @@ class Dispatcher
 	 */
 	public function actionName()
 	{
-		return $this->action_name;
+		return $this->_action_name;
+	}
+
+	/**
+	 * @return array
+	 */
+	public function getParams()
+	{
+		return $this->_params;
 	}
 
 	private function _run()
 	{
-		if ($this->load_account && is_callable($this->load_account)) {
-			$this->request->setUserCall($this->load_account);
-		}
 
-		$control_name = $this->_fixCtlName($this->control_name);
+		empty($this->_control_name) && $this->_control_name = $this->default_controller;
+		empty($this->_action_name) && $this->_action_name = $this->default_action;
+
+		$control_name = $this->_fixCtlName($this->_control_name);
 		$class_control = $this->_getCtlClass($control_name);
 
 		// load controller class
@@ -209,21 +234,21 @@ class Dispatcher
 			$error_ctrl = $this->controller_prefix . 'Error404';
 			if ($error_ctrl != $class_control && class_exists($error_ctrl)) {
 				$obj_ctl = new $error_ctrl($this->request);
-				$obj_ctl->control_name = $this->control_name;
+				$obj_ctl->control_name = $this->_control_name;
 				$obj_ctl->dispatcher($this);
 				if (method_exists($obj_ctl, '__call')) {
-					$response = $obj_ctl->__call($this->action_name, $this->params);
-					return $this->send($response, $this->action_name);
+					$response = $obj_ctl->__call($this->_action_name, $this->_params);
+					return $this->send($response, $this->_action_name);
 				}
 			}
-			return self::out(404, 'controller not found');
+			return $this->out(404, 'controller not found');
 		}
 
 		if (is_callable($this->before_dispatch)) {
 			$this->before_dispatch();
 		}
 
-		return $this->forward($control_name, $this->action_name, $this->params);
+		return $this->forward($control_name, $this->_action_name, $this->_params);
 	}
 
 	private function _fixCtlName($control_name)
@@ -256,7 +281,7 @@ class Dispatcher
 		try {
 			$obj_ctl = new $class_control($this->request);
 			if (!$obj_ctl instanceof Controller) {
-				return self::out(400, 'Invalid Controller');
+				return $this->out(400, 'Invalid Controller');
 			}
 
 			if (defined('HAS_MULTIDOMAIN') && TRUE === HAS_MULTIDOMAIN) { // 多服务域专用
@@ -276,48 +301,96 @@ class Dispatcher
 				$action_name = $this->default_action;
 			}
 
+			$obj_ctl->actionName($action_name);
+
 			// before action hook
 			if (method_exists($obj_ctl, 'beforeAction')) {
-				$ret = $obj_ctl->beforeAction($action_name, $this->params);
+				$ret = $obj_ctl->beforeAction($action_name, $this->_params);
 				if (is_array($ret) || is_int($ret) || is_string($ret)) { // NULL will be continue
 					return $this->send($ret, $action_name);
 				}
 			}
 
-			$method_name = $this->action_prefix . $action_name . $this->action_suffix;
+			$req_method = strtolower($this->request->REQUEST_METHOD);
 
-			$obj_ctl->actionName($action_name);
+			$calls = [];
+
+			if (empty($action_name)) {
+				$calls[] = $this->action_prefix . '_' .$req_method;
+			} else {
+				$calls[] = $this->action_prefix . $action_name . '_' .$req_method;
+				$calls[] = $this->action_prefix . $action_name;
+			}
+
+			$calls[] = 'fancy_call' . '_' .$req_method;
+			$calls[] = 'fancy_call';
+			$calls[] = '__call';
+
 			//调用执行方法
-			if (method_exists($obj_ctl, $method_name)) {
-				$response = call_user_func_array(array($obj_ctl, $method_name), $this->params);
-			}
-			elseif (method_exists($obj_ctl, '__call')) {
-				$response = $obj_ctl->__call($action_name, $this->params);
-			}
-			else {
-				return self::out(404, 'action '.$action_name.' not found');
+			foreach ($calls as $m_name) {
+				if (method_exists($obj_ctl, $m_name)) {
+					Log::info('hit '.$control_name.'/'.$action_name.' -> '.$class_control.':'.$m_name, __METHOD__);
+					if ($m_name == '__call') {
+						$response = $obj_ctl->__call($action_name, $params);
+					}
+					else {
+						if (strpos($m_name, 'fancy_call') === 0 ) {
+							array_unshift($params, $action_name);
+						}
+						$response = call_user_func_array(array($obj_ctl, $m_name), $params);
+					}
+
+					// after action hook
+					if (method_exists($obj_ctl, 'afterAction')) {
+						$obj_ctl->afterAction($response);
+					}
+
+					return $this->send($response, $action_name);
+
+				}
 			}
 
-			// after action hook
-			if (method_exists($obj_ctl, 'afterAction')) {
-				$obj_ctl->afterAction($response);
-			}
+			return $this->out(404, 'action `'.$action_name.'` not found');
 
-			return $this->send($response, $action_name);
 		}
 		catch(Exception $e) {
-			Log::notice($e, __METHOD__ . ' ' . $control_name . '/' . $action_name);
+			$label = __METHOD__ . ' ' . $control_name . '/' . $action_name;
+			if (count($params) > 0) {
+				$label .= '/' . implode('/', $params);
+			}
+			if ($this->request->isPost()) {
+				Log::notice($_POST, $label.' _POST');
+			}
+
+			Log::warning($e, $label);
 
 			if (defined('_PS_DEBUG') && TRUE === _PS_DEBUG) {
-				throw $e;
-			}
-			/*$message = sprintf("dispatcher::_run() %s/%s: exception '%s' with message '%s' in %s:%d",
-				$this->control_name, $this->action_name,
-				$e->getCode(), $e->getMessage(), substr($e->getFile(), strlen(APP_ROOT)), $e->getLine()
-			);*/
 
-			return self::out(404, Loader::printException($e, TRUE));
-			#return 404;
+				if (!$this->_is_api_call) {
+					throw $e;
+				}
+				return $this->send([FALSE, 'data' => NULL, 'error' => [
+					'code' => $e->getCode(),
+					'message' => $e->getMessage(),
+					'file' => Loader::safePath($e->getFile()),
+					'line' => $e->getLine(),
+					'trace' => $e->getTrace(),
+					'trace_string' => Loader::printException($e, TRUE),
+				]]);
+			}
+
+			if ($e instanceof PDOException) {
+				$e = new Exception('An internal error has occurred and we are working on it. Please try later.', $e->getCode());
+			}
+
+			if (!$this->_is_api_call) {
+				return $this->out(404, $e->getMessage());
+			}
+			return $this->send([FALSE, 'data' => NULL, 'error' => [
+				'code' => $e->getCode(),
+				'message' => $e->getMessage(),
+				// 'trace_string' => Loader::printException($e, TRUE),
+			]]);
 		}
 	}
 
@@ -326,7 +399,7 @@ class Dispatcher
 	 */
 	public function run($cached = FALSE)
 	{
-		self::preheat($this->request);
+		$this->preheat();
 
 		$this->_cached = $cached;
 
@@ -335,7 +408,7 @@ class Dispatcher
 			return;
 		}
 
-		$section = 'controller_' . strtolower($this->control_name);
+		$section = 'controller_' . strtolower($this->_control_name);
 		$config = Cache::config($section);
 		if (!is_array($config)) {
 			Log::info($config, __METHOD__.' cache instance load error : ' . $section);
@@ -345,9 +418,10 @@ class Dispatcher
 		}
 
 		$cache = Cache::farm($section);
-		$cache->setOption('lang', $this->lang);
+		$_https = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] == 'on' ? 's' : '';
+		$cache->setOption('subgroup', $this->lang . $_https);
 
-		$key = $this->action_name;
+		$key = $this->_action_name;
 		$no_index = $cache->getOption('no_index');
 
 		if ($key == $this->default_action && $no_index) {
@@ -375,7 +449,7 @@ class Dispatcher
 			$cache->setOption('fileSuffix', $fileSuffix);
 		}
 
-		$id = $cache->makeId(strtolower($key), $this->params);
+		$id = $cache->makeId(strtolower($key), $this->_params);
 
 		Log::debug($id, __METHOD__);
 
@@ -411,12 +485,12 @@ class Dispatcher
 	public function send($response, $method = NULL)
 	{
 		if (is_null($response) || is_bool($response)) {
-			Log::info('dispatcher::send(): ctl: ' . $this->control_name . ', method: '.$method.', response is null or boolean');
+			Log::info('dispatcher::send(): ctl: ' . $this->_control_name . ', method: '.$method.', response is null or boolean');
 			//
 			return;
 		}
 		if (is_int($response)) {
-			return self::out($response);
+			return $this->out($response);
 		}
 		if (is_string($response)) {
 			if (preg_match("#^[a-z0-9_/\.]+$#i", $response)) {
@@ -454,9 +528,9 @@ class Dispatcher
 					if ($res_0 == 302) { //302 && '302'
 						Loader::redirect($res_1);
 					} elseif ($res_0 >= 400) { // 404
-						return self::out($res_0, $res_1);
+						return $this->out($res_0, $res_1);
 					} elseif ($res_0 == 200) { // 200
-						return self::tips($res_1);
+						return $this->tips($res_1);
 					}
 					// TODO: other status
 				}
@@ -492,6 +566,13 @@ class Dispatcher
 				header('Content-Type: '.$content_type.'; charset='.$charset);
 			}
 			if (isset($no_cached)) Loader::nocache();
+
+			if (isset($headers)) {
+				foreach($headers as $h) {
+					if (is_string($h))
+						header($h);
+				}
+			}
 		}
 
 		if ($this->_is_api_call) {
@@ -499,7 +580,7 @@ class Dispatcher
 				return; //html output
 			}
 			if (!isset($data)) {
-				$data = [];
+				$data = NULL;
 			}
 
 			if (!isset($api_status) && isset($status)) {
@@ -516,38 +597,42 @@ class Dispatcher
 				$this->jsonpWrapBegin();
 			}
 
-			$append = [];
+			if (!isset($meta) || !is_array($meta)) {
+				$meta = [];
+			}
+			if (!isset($meta['ok'])) {
+				$meta['ok'] = $api_status;
+			}
 
-			if (isset($errors) && $errors) {
-				$api_status = FALSE;
-				$append['errors'] = $errors;
+			if (isset($error) && $error) {
+				$meta['ok'] = $api_status = FALSE;
 			}
 
 			if (isset($id)) {
-				$append['id'] = $id;
+				$meta['id'] = $id;
 			}
 
 			if (isset($event)) {
-				$append['event'] = $event;
+				$meta['event'] = $event;
 			}
 
 			if (isset($retry)) {
-				$append['retry'] = $retry;
+				$meta['retry'] = $retry;
 			}
 
 			if (isset($context) && is_array($context) && isset($api_keys) && is_array($api_keys)) {
 				foreach ($context as $key => $value) {
 					if (in_array($key, $api_keys)) {
-						$append[$key] = $value;
+						$meta[$key] = $value;
 					}
 				}
 			}
 
-			if (isset($location) && !isset($append['location'])) {
-				$append['location'] = $location;
+			if (isset($location) && !isset($meta['location'])) {
+				$meta['location'] = $location;
 			}
 
-			echo $this->sendJson($api_status, $data, $append);
+			echo $this->sendJson($meta, $data, isset($error) ? $error : NULL);
 
 			if (!$this->_cached) {
 				$this->jsonpWrapEnd();
@@ -555,58 +640,56 @@ class Dispatcher
 			return;
 		}
 
-		// else normal output
-		if (!headers_sent()) {
-			// other headers
-			if (isset($headers)) {
-				foreach($headers as $h) {
-					if (is_string($h))
-						header($h);
-				}
-			}
+		if (isset($content)) {
+			echo $content;
+			return;
+		}
+
+		if (isset($error) && $error && !isset($template)) {
+			$template = 'error';
+
 		}
 
 		if (isset($template)) {
-			$view = self::loadView($this->lang);
+			if (!isset($lang)) {
+				$lang = $this->lang;
+			}
+			$view = $this->getView($lang);
 
-			if (isset($context)) {
-				if (!is_array($context)) {
-					$context = [];
-				}
-
+			if (isset($context) && is_array($context)) {
 				$view->assign($context);
+				if (isset($error) && !isset($context['error'])) {
+					$view->assign('error', $error);
+				}
 			}
 
-			$template = $template . static::$_config['view_ext'];
-			$view->display($template);
-		} elseif (isset($content)) {
-			echo $content;
+			$view->display($template . $this->view_ext);
 		}
 	}
 
 	/**
-	 * @param $status boolean
+	 * @param $meta array
 	 * @param $data array
+	 * @param $error array
 	 */
-	protected function sendJson($status, $data, $append = NULL)
+	protected function sendJson(array $meta, $data = NULL, $error = NULL)
 	{
-		empty($data) && $data = [];
 		$options = 0;
 		if (defined('JSON_UNESCAPED_UNICODE') && defined('JSON_UNESCAPED_SLASHES')) {
 			$options = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES;
 		}
 
 		if ($this->request->hasAccept('text/event-stream')) {
-			if (isset($append['event'])) {
-				echo 'event: ', $append['event'], PHP_EOL;
+			if (isset($meta['event'])) {
+				echo 'event: ', $meta['event'], PHP_EOL;
 			}
 
-			if (isset($append['retry'])) {
-				echo 'retry: ', $append['retry'], PHP_EOL;
+			if (isset($meta['retry'])) {
+				echo 'retry: ', $meta['retry'], PHP_EOL;
 			}
 
-			if (isset($append['id'])) {
-				echo 'id: ', $append['id'], PHP_EOL;
+			if (isset($meta['id'])) {
+				echo 'id: ', $meta['id'], PHP_EOL;
 			}
 
 			echo 'data: ', json_encode($data, $options), PHP_EOL;
@@ -618,23 +701,20 @@ class Dispatcher
 			exit;
 		}
 
-		if (is_bool($status)) {
-			$status = $status ? 'ok' : 'fail';
-		}
 		$result = [
-			'status' => $status,
+			'meta' => $meta,
 			'data' => $data
 		];
+		// if (is_bool($meta['ok'])) {
+		// 	$result['status'] = $meta['ok'] ? 'ok' : 'fail'; // for compatibility
+		// }
 
-		if (is_array($append) && !empty($append)) {
-			if (isset($append['status'])) {
-				unset($append['status']);
-			}
-			if (isset($append['data'])) {
-				unset($append['data']);
-			}
-			$result = array_merge($result, $append);
+		if (isset($error)) {
+			$result['error'] = $error;
 		}
+
+		// unset($meta['status'], $meta['meta'], $meta['data']);
+		// $result = array_merge($result, $meta);
 
 		return json_encode($result, $options);
 		//exit;
@@ -655,11 +735,18 @@ class Dispatcher
 		}
 	}
 
+	/**
+	 * @deprecated
+	 */
 	public static function loadView($opt = NULL)
 	{
-		static $view = null;
-		if (is_null($view)) {
-			$view_class = static::$_config['view_class'];
+		return static::farm([])->getView($opt);
+	}
+
+	public function getView($opt = NULL)
+	{
+		if (is_null($this->_view)) {
+			$view_class = $this->view_class;
 			$view = new $view_class($opt);
 
 			// TODO: view cache, not recommend
@@ -676,12 +763,21 @@ class Dispatcher
 			if (isset($view_pre_vars) && is_array($view_pre_vars)) {
 				$view->assign($view_pre_vars);
 			}
+
+			$view->assign('request', $this->request);
+
+			if ($this->account_call && is_callable($this->account_call)) {
+				$view->assign('current_user', call_user_func($this->account_call));
+			}
+			$this->_view = $view;
 		}
-		return $view;
+
+		return $this->_view;
 	}
 
 	/**
 	 * load Bo prefix (namespace supported)
+	 * @deprecated
 	 * @param string $cn controller name
 	 */
 	public static function loadBoNs($cn)
@@ -694,6 +790,9 @@ class Dispatcher
 	}
 
 
+	/**
+	 * @deprecated
+	 */
 	public static function loadBoClass($ns, $class)
 	{
 		if (empty($ns)) {
@@ -702,7 +801,7 @@ class Dispatcher
 		return $ns . '_' . ucfirst($class);
 	}
 
-	public static function out($code, $message = null)
+	public function out($code, $message = null)
 	{
 		static $status = array(
 			400 => '400 Bad Request',
@@ -712,34 +811,43 @@ class Dispatcher
 			404 => '404 Not Found',
 			405 => '405 Method Not Allowed',
 			406 => '406 Not Acceptable',
+			501 => '501 Not Implemented',
 		);
 		$code = (int)$code;
 		if (!isset($status[$code])) {
+			Log::notice($message, __METHOD__. ' unprocessed code '.$code);
 			$code = 404;
 		}
 
+		$msg = "dispatcher::out() -> status: $code, message: $message, request: $this->request";
+		self::log($msg, $code);
+
 		header("HTTP/1.1 ".$status[$code]);
 		$_SERVER['HTTP_STATUS'] = $code;
-		$view = self::loadView(static::$_config['lang']);
+		if ($this->request->isApiCall()) {
+			$result = [
+			'meta' => ['ok' => FALSE],
+			'data' => NULL,
+			'error' => ['code' => $code, 'message' => $message],
+			];
+			echo json_encode($result, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+			return $code;
+		}
+		$view = $this->getView($this->lang);
 		$view->assign('status_code', $code);
 		$view->assign('status_label', $status[$code]);
 		$view->assign('message', $message);
-		$view->display('error' . static::$_config['view_ext']);
-
-		$request = Request::current();
-		$msg = "dispatcher::out() -> status: $code, message: $message, request: $request";
-		self::log($msg, $code);
+		$view->display('error' . $this->view_ext);
 
 		return $code;
 	}
 
 	private static function log($msg, $code = 404)
 	{
-		$now = time();
-		$log_name = defined('LOG_NAME') ? LOG_NAME . '_' : '';
+		$log_name = defined('LOG_NAME') ? strtolower(LOG_NAME) . '_' : '';
 		$log_root = defined('LOG_ROOT') ? LOG_ROOT : '/tmp/';
-		$log_file = $log_root . $log_name . 'dispatcher_'.$code.'_'.date('oW', $now).'.log';
-		$line = date("Y-m-d H:i:s", $now) . ' ' . $msg . "\n";
+		$log_file = $log_root . $log_name . 'dispatcher_'.$code.'.log';
+		$line = date("Y-m-d H:i:s") . ' ' . $msg . "\n";
 		@error_log($line, 3, $log_file);
 	}
 
@@ -750,30 +858,28 @@ class Dispatcher
 	 * @param string $message
 	 * @return void
 	 */
-	public static function tips($message)
+	public function tips($message)
 	{
-		$request = Request::current();
-		$view = self::loadView(static::$_config['lang']);
+		$view = $this->getView($this->lang);
 		$view->assign('message', $message);
-		$view->assign('referer', $request->HTTP_REFERER);
-		$view->display('tips' . static::$_config['view_ext']);
+		$view->assign('referer', $this->request->HTTP_REFERER);
+		$view->display('tips' . $this->view_ext);
 	}
 
 	/**
 	 * preheat: 预热，设置 ContentType 和 相关的头
 	 *
-	 * @param Request $request
 	 * @param string $charset NULL UTF-8
 	 * @return void
 	 * @author liutao
 	 **/
-	public static function preheat(Request $request, $charset = NULL)
+	public function preheat($charset = NULL)
 	{
 		if(is_null($charset)) {
 			$charset = defined('RESPONSE_CHARSET') ? RESPONSE_CHARSET : 'UTF-8';
 		}
 
-		$ctype = $request->getContentType();
+		$ctype = $this->request->getContentType();
 
 		if ($ctype) {
 			header('Content-Type: '.$ctype.'; charset='.$charset);
@@ -782,7 +888,7 @@ class Dispatcher
 		unset($ctype);
 
 		// CORS, 跨域 Ajax 调用支持
-		$http_origin = $request->HTTP_ORIGIN;
+		$http_origin = $this->request->HTTP_ORIGIN;
 		if (!empty($http_origin)) {
 			$domain = Request::genCookieDomain();
 			if ( !empty($domain) && ($pos = strrpos($http_origin, $domain)) !== FALSE ) {
@@ -804,7 +910,7 @@ class Dispatcher
 		}
 		unset($http_origin);
 
-		if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
+		if ($this->request->REQUEST_METHOD == 'OPTIONS') {
 			header('Allow: GET,HEAD,POST,OPTIONS');
 			exit;
 		}

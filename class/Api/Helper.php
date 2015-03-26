@@ -10,6 +10,25 @@
 class Api_Helper
 {
 	private $_salt = NULL;
+	private $_life = 0;
+
+	/**
+	 * 解析 Token 中的内容
+	 * @param string $token
+	 * @return mixed
+	 */
+	public static function parseToken($token)
+	{
+		if (strlen($token) < 40 + 13 + 2) {
+			return FALSE;
+		}
+
+		return [
+			'hash' => substr($token, 0, 40),
+			'stamp' => substr($token, 40, 13),
+			'value' => substr($token, 40+13),
+		];
+	}
 
 	public static function farm($id = 0)
 	{
@@ -31,6 +50,17 @@ class Api_Helper
 		$this->_salt = $salt;
 	}
 
+	public function life($life = NULL)
+	{
+		if (is_null($life)) {
+			return $this->_life;
+		}
+
+		if (is_int($life) && $life >= 0) {
+			$this->_life = $life;
+		}
+	}
+
 	/**
 	 * stamp length must be 13 chars
 	 * @param string $value
@@ -48,36 +78,34 @@ class Api_Helper
 
 	/**
 	 * 验证 Token
-	 * @param string $token
+	 * @param mixed $token
 	 * @return string
 	 */
 	public function verifyToken($token)
 	{
-		$arr = static::parseToken($token);
-		if (!$arr) {
+		if (is_string($token)) {
+			$arr = static::parseToken($token);
+		} else {
+			$arr = $token;
+		}
+
+		if (!is_array($arr)) {
 			return FALSE;
 		}
 
 		//var_dump($token, $stamp, $value, $this->hashToken($value, $stamp));
-		return $token == $this->hashToken($arr['value'], $arr['stamp']);
-	}
+		if ($token == $this->hashToken($arr['value'], $arr['stamp'])) {
+			if ($this->_life == 0) {
+				return TRUE;
+			}
 
-	/**
-	 * 解析 Token 中的内容
-	 * @param string $token
-	 * @return mixed
-	 */
-	public static function parseToken($token)
-	{
-		if (strlen($token) < 40 + 13 + 2) {
-			return FALSE;
+			$time = hexdec(substr($arr['stamp']));
+		 	if ($this->_life > 0 && $time + $this->_life > time()) {
+		 		return TRUE;
+		 	}
 		}
 
-		return [
-			'hash' => substr($token, 0, 40),
-			'stamp' => substr($token, 40, 13),
-			'value' => substr($token, 40+13),
-		];
+		return FALSE;
 	}
 
 } // END class Sp_Api

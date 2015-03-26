@@ -42,13 +42,13 @@ abstract class Dust_Action_Abstract //implements Action_Interface
 	public function callGrid($callback, array $keys = [])
 	{
 		$request = $this->getRequest();
-		$condition = [];
+		$where = [];
 		foreach($keys as $k) {
 			$v = $request->$k;
-			if(!is_null($v)) $condition[$k] = $v;
+			if(!is_null($v)) $where[$k] = $v;
 		}
 
-		return $this->fetchGrid($callback, $condition);
+		return $this->fetchGrid($callback, ['where' => $where]);
 	}
 
 	/**
@@ -64,33 +64,44 @@ abstract class Dust_Action_Abstract //implements Action_Interface
 
 		$sort_name = $request->sidx;
 		$sort_order = $request->sord;
+		// $sorts = [];
 		if($sort_name) {
 			$condition['sort_name'] = $sort_name;
-			$condition['order_by'] = $sort_name;
+			// $sorts[0] = [$sort_name];
 			if($sort_order) {
 				$condition['sort_order'] = $sort_order;
-				$condition['order_by'] .= ' ' . $sort_order;
+				// $sorts[0][] = $sort_order;
 			}
 		}
+
+		// if (count($sorts) > 0) {
+		// 	$condition['sorts'] = $sorts;
+		// }
 
 		$page = $request->page;
 		$limit = $request->rows;
 		if (!$page) $page = 1;
-		if (!$limit) $limit = 10;
+		if (!$limit) $limit = 20;
 
-		$offset = (($page-1) * $limit);
+		$context = ['__src' => $request->_source];
+
+		$start = $request->start;
+		if ($start !== NULL) {
+			$offset = (int)$start;
+			$context['start'] = $offset;
+		} else {
+			$offset = (($page-1) * $limit);
+			$context['page'] = $page;
+		}
 		$total_records = -1;
 		$data = call_user_func_array($callback, array($condition, $limit, $offset, &$total_records));
 		$total_pages = ceil($total_records/$limit);
+		$context['total_records'] = $total_records;
+		$context['total_pages'] = $total_pages;
 		return [
 			'data' => $data,
-			'context' => [
-				'page' => $page,
-				'total_pages' => $total_pages,
-				'total_records' => $total_records,
-				'__src' => $request->_source
-			],
-			'api_keys' => ['page', 'total_pages', 'total_records', '__src'],
+			'context' => $context,
+			'api_keys' => ['page', 'start', 'total_pages', 'total_records', '__src'],
 		];
 	}
 
