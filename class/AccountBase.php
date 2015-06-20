@@ -277,12 +277,7 @@ abstract class AccountBase extends Model
 		if (!isset($pk) || empty($pk)) {
 			$pk = static::FIELD_LOGIN;
 		}
-		$row = static::find([
-			'where' => [$pk => $username],
-			'columns' => 'id,'.$pk.',password,status',
-			'fetch' => 'row',
-			'limit' => 1
-		]);
+		$row = static::findByPk($username, $pk);
 		if (!$row) {
 			return static::ERR_NOT_FOUND;
 		}

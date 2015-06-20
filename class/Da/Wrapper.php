@@ -87,6 +87,12 @@ final class Da_Wrapper
 	private static function _loadDbo(Array $cfg, $key)
 	{
 		if(!isset(self::$dbos[$key]) || self::$dbos[$key] == null) {
+			// ldap only
+			if (isset($cfg['type']) && strtolower($cfg['type']) == 'ldap') {
+				self::$dbos[$key] = new Da_LDAP($cfg);
+				return self::$dbos[$key];
+			}
+
 			// mongodb only
 			if (isset($cfg['type']) && $cfg['type'] == 'mongo' && isset($cfg['servers'])) {
 				isset($cfg['options']) || $cfg['options'] = ['connect' => TRUE];
