@@ -1,8 +1,14 @@
 {
     "name": "lute/core",
     "description": "A short description of what your package does",
+    "homepage": "https://github.com/liut/lute_core",
+    "license": "MIT",
+    "version": "1.0.2",
     "require": {
-        "php": ">=5.5.0",
+        "php": ">5.5.0"
+    },
+    "autoload": {
+        "files": ["class/Loader.php"]
     }
 }
 
