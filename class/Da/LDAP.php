@@ -26,7 +26,7 @@ class Da_LDAP
 
 	}
 
-	protected function connect()
+	public function connect()
 	{
 		if (is_resource($this->_conn)) {
 			return $this->_conn;
@@ -43,11 +43,11 @@ class Da_LDAP
 		return $this->_conn;
 	}
 
-	// public function bind($username, $password)
-	// {
-	// 	$rdn = $this->rdn($username);
-	// 	return ldap_bind($this->connect(), $rdn, $password);
-	// }
+	public function login($username, $password)
+	{
+		$rdn = $this->rdn($username);
+		return @ldap_bind($this->connect(), $rdn, $password);
+	}
 
 	public function __call($name, array $args)
 	{
