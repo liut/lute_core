@@ -14,7 +14,7 @@ defined('DS') || define('DS', DIRECTORY_SEPARATOR);
 
 
 // 初始化加载环境
-Loader::init();
+// Loader::init(); // do not auto init for composer dev
 
 /**
  * Loader
