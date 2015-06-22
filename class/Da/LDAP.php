@@ -26,6 +26,11 @@ class Da_LDAP
 
 	}
 
+	public function baseDn()
+	{
+		return $this->_base_dn;
+	}
+
 	public function connect()
 	{
 		if (is_resource($this->_conn)) {

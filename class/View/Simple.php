@@ -69,7 +69,7 @@ class View_Simple implements View_Interface
 	 */
 	public function assign($key, $value = null)
 	{
-		$this->data[$key] = $value;
+		is_string($key) && $this->data[$key] = $value;
 	}
 
 	/**
