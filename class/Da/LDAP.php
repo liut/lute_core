@@ -17,6 +17,8 @@ class Da_LDAP
 
 	private $_conn = NULL;
 
+	private $_cache_bound = [];
+
 	public function __construct(array $opt)
 	{
 		isset($opt['host']) && $this->_host = $opt['host'];
@@ -48,10 +50,19 @@ class Da_LDAP
 		return $this->_conn;
 	}
 
-	public function login($username, $password)
+	public function login($uid, $password)
 	{
-		$rdn = $this->rdn($username);
-		return @ldap_bind($this->connect(), $rdn, $password);
+		if (isset($this->_cache_bound[$uid]) && $this->_cache_bound[$uid]) {
+			return TRUE;
+		}
+
+		$rdn = $this->rdn($uid);
+		$bound = @ldap_bind($this->connect(), $rdn, $password);
+		if ($bound) {
+			$this->_cache_bound[$uid] = TRUE;
+		}
+
+		return $bound;
 	}
 
 	public function __call($name, array $args)
