@@ -28,8 +28,16 @@ class Da_LDAP
 
 	}
 
-	public function baseDn()
+	public function baseDn($ou = NULL)
 	{
+		if ($ou == 'groups') {
+			return 'ou=groups,'.$this->_base_dn;
+		}
+
+		if ($ou == 'people') {
+			return 'ou=people,'.$this->_base_dn;
+		}
+
 		return $this->_base_dn;
 	}
 
