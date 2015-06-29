@@ -76,6 +76,7 @@ class Request
 		}
 
 		$this->_params['PATH'] = $path;
+		$this->_params['QUERY_STRING'] = isset($arr['query']) ? $arr['query'] : '';
 
 		$this->_params['SCHEME'] = isset($arr['scheme']) ? $arr['scheme'] : NULL;
 		$this->_params['HOST'] = isset($arr['host']) ? $arr['host'] : NULL;
