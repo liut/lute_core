@@ -69,6 +69,9 @@ class View_Simple implements View_Interface
 	 */
 	public function assign($key, $value = null)
 	{
+		if (is_array($key)) {
+			$this->data = array_merge($this->data, $key);
+		}
 		is_string($key) && $this->data[$key] = $value;
 	}
 
@@ -103,63 +106,89 @@ class View_Simple implements View_Interface
 	 *
 	 */
 	public function fetch($tpl_name)
-	{}
+	{
+		$level = ob_get_level();
+		ob_start();
+		try {
+			$this->display($tpl_name);
+		} catch (Exception $e) {
+			while (ob_get_level() > $level) {
+				ob_end_clean();
+			}
 
-    /**
-     * Add template directory(s)
-     *
-     * @param  string|array $template_dir directory(s) of template sources
-     * @param  string       $key          of the array element to assign the template dir to
-     *
-     * @return Smarty          current Smarty instance for chaining
-     * @throws SmartyException when the given template directory is not valid
-     */
-    public function addTemplateDir($template_dir, $key = null)
-    {
-        // make sure we're dealing with an array
-        $this->_tpl_dirs = (array) $this->_tpl_dirs;
+			throw $e;
+		}
 
-        if (is_array($template_dir)) {
-            foreach ($template_dir as $k => $v) {
-                $v = preg_replace('#(\w+)(/|\\\\){1,}#', '$1$2', rtrim($v, '/\\')) . DS;
-                if (is_int($k)) {
-                    // indexes are not merged but appended
-                    $this->_tpl_dirs[] = $v;
-                } else {
-                    // string indexes are overridden
-                    $this->_tpl_dirs[$k] = $v;
-                }
-            }
-        } else {
-            $v = preg_replace('#(\w+)(/|\\\\){1,}#', '$1$2', rtrim($template_dir, '/\\')) . DS;
-            if ($key !== null) {
-                // override directory at specified index
-                $this->_tpl_dirs[$key] = $v;
-            } else {
-                // append new directory
-                $this->_tpl_dirs[] = $v;
-            }
-        }
-        // $this->joined_template_dir = join(DIRECTORY_SEPARATOR, $this->_tpl_dirs);
+		return ob_get_clean();
+	}
 
-        return $this;
-    }
+	/**
+	 * Render a specific template with context.
+	 * @param  string $name
+	 * @param  array  $context
+	 * @return string
+	 */
+	public function render($name, array $context = [])
+	{
+		$this->assign($context);
+		return $this->fetch($name);
+	}
 
-    /**
-     * Get template directories
-     *
-     * @param mixed $index index of directory to get, null to get all
-     *
-     * @return array|string list of template directories, or directory of $index
-     */
-    public function getTemplateDir($index = null)
-    {
-        if ($index !== null) {
-            return isset($this->_tpl_dirs[$index]) ? $this->_tpl_dirs[$index] : [];
-        }
+	/**
+	 * Add template directory(s)
+	 *
+	 * @param  string|array $template_dir directory(s) of template sources
+	 * @param  string       $key          of the array element to assign the template dir to
+	 *
+	 * @return Smarty          current Smarty instance for chaining
+	 * @throws SmartyException when the given template directory is not valid
+	 */
+	public function addTemplateDir($template_dir, $key = null)
+	{
+		// make sure we're dealing with an array
+		$this->_tpl_dirs = (array) $this->_tpl_dirs;
 
-        return (array) $this->_tpl_dirs;
-    }
+		if (is_array($template_dir)) {
+			foreach ($template_dir as $k => $v) {
+				$v = preg_replace('#(\w+)(/|\\\\){1,}#', '$1$2', rtrim($v, '/\\')) . DS;
+				if (is_int($k)) {
+					// indexes are not merged but appended
+					$this->_tpl_dirs[] = $v;
+				} else {
+					// string indexes are overridden
+					$this->_tpl_dirs[$k] = $v;
+				}
+			}
+		} else {
+			$v = preg_replace('#(\w+)(/|\\\\){1,}#', '$1$2', rtrim($template_dir, '/\\')) . DS;
+			if ($key !== null) {
+				// override directory at specified index
+				$this->_tpl_dirs[$key] = $v;
+			} else {
+				// append new directory
+				$this->_tpl_dirs[] = $v;
+			}
+		}
+		// $this->joined_template_dir = join(DIRECTORY_SEPARATOR, $this->_tpl_dirs);
+
+		return $this;
+	}
+
+	/**
+	 * Get template directories
+	 *
+	 * @param mixed $index index of directory to get, null to get all
+	 *
+	 * @return array|string list of template directories, or directory of $index
+	 */
+	public function getTemplateDir($index = null)
+	{
+		if ($index !== null) {
+			return isset($this->_tpl_dirs[$index]) ? $this->_tpl_dirs[$index] : [];
+		}
+
+		return (array) $this->_tpl_dirs;
+	}
 
 }
 

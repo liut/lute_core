@@ -32,8 +32,7 @@ class Dispatcher
 		'account_call' => NULL, // 加载 account 类，内容为 callable
 		'namespace' => '',
 		'request' => NULL,
-		'view_class' => 'View_Smarty',
-		'view' => NULL,
+		'view_call' => NULL, // A callable as return View_Engine_Interface instance
 		'view_ext' => '.htm'
 	];
 
@@ -49,8 +48,6 @@ class Dispatcher
 	private $_callback = NULL;
 	private $_wraped = FALSE;
 	private $_cached = FALSE;
-
-	private $_view = NULL;
 
 	/**
 	 * 初始化一个调度实例
@@ -107,10 +104,6 @@ class Dispatcher
 	protected function __construct(array $config)
 	{
 		// override self default config
-		if (defined('VIEW_CLASS')) {
-			self::$_config['view_class'] = VIEW_CLASS;
-		}
-
 		foreach (self::$_config as $key => $value) {
 			if (array_key_exists($key, $config)) {
 				self::$_config[$key] = $value = $config[$key];
@@ -130,7 +123,7 @@ class Dispatcher
 			$this->_callback = $this->request->callback;
 		}
 
-		$uri = explode('/', trim($this->request->PATH, '/'));
+		$uri = explode('/', trim($this->request->PATH, '/.'));
 
 		if(is_array($uri) and count($uri) > 0){
 			//controller
@@ -654,16 +647,15 @@ class Dispatcher
 			if (!isset($lang)) {
 				$lang = $this->lang;
 			}
-			$view = $this->getView($lang);
 
-			if (isset($context) && is_array($context)) {
-				$view->assign($context);
-				if (isset($error) && !isset($context['error'])) {
-					$view->assign('error', $error);
-				}
+			if (!isset($context)) {
+				$context = [];
+			}
+			if (isset($error) && !isset($context['error'])) {
+				$context['error'] = $error;
 			}
 
-			$view->display($template . $this->view_ext);
+			$this->render($template . $this->view_ext, $context);
 		}
 	}
 
@@ -735,44 +727,23 @@ class Dispatcher
 		}
 	}
 
-	/**
-	 * @deprecated
-	 */
-	public static function loadView($opt = NULL)
+	public function render($name, array $context)
 	{
-		return static::farm([])->getView($opt);
-	}
+		$context['request'] = $this->request;
 
-	public function getView($opt = NULL)
-	{
-		if (is_null($this->_view)) {
-			$view_class = $this->view_class;
-			$view = new $view_class($opt);
-
-			// TODO: view cache, not recommend
-			$config = Loader::config('view');
-			extract($config, EXTR_PREFIX_ALL, 'view');
-			isset($view_caching) or $view_caching = FALSE;
-			isset($view_cache_lifetime) or $view_cache_lifetime = 3600;
-
-			if ($view_caching === TRUE && class_exists('Smarty', FALSE) && $view instanceof Smarty) {
-				$view->setCaching(Smarty::CACHING_LIFETIME_CURRENT);
-				$view->setCacheLifetime($view_cache_lifetime);
-			}
-
-			if (isset($view_pre_vars) && is_array($view_pre_vars)) {
-				$view->assign($view_pre_vars);
-			}
-
-			$view->assign('request', $this->request);
-
-			if ($this->account_call && is_callable($this->account_call)) {
-				$view->assign('current_user', call_user_func($this->account_call));
-			}
-			$this->_view = $view;
+		if ($this->account_call && is_callable($this->account_call)) {
+			$context['current_user'] = call_user_func($this->account_call);
 		}
 
-		return $this->_view;
+		if (is_null($this->view_call)) {
+			$view_class = defined('VIEW_CLASS') ? VIEW_CLASS : 'View_Simple';
+			$this->view_call = function($dispatcher) use ($view_class) {
+				return new $view_class($dispatcher->lang);
+			};
+		}
+
+		$view = call_user_func($this->view_call, $this);
+		echo $view->render($name, $context);
 	}
 
 	/**
@@ -833,11 +804,8 @@ class Dispatcher
 			echo json_encode($result, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 			return $code;
 		}
-		$view = $this->getView($this->lang);
-		$view->assign('status_code', $code);
-		$view->assign('status_label', $status[$code]);
-		$view->assign('message', $message);
-		$view->display('error' . $this->view_ext);
+		$context = ['status_code' => $code, 'status_label' => $status[$code], 'message' => $message];
+		$this->render('error'.$this->view_ext, $context);
 
 		return $code;
 	}
@@ -860,10 +828,7 @@ class Dispatcher
 	 */
 	public function tips($message)
 	{
-		$view = $this->getView($this->lang);
-		$view->assign('message', $message);
-		$view->assign('referer', $this->request->HTTP_REFERER);
-		$view->display('tips' . $this->view_ext);
+		$this->render('tips'.$this->view_ext,['message' => $message, 'referer' => $this->request->HTTP_REFERER]);
 	}
 
 	/**

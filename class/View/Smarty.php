@@ -174,4 +174,16 @@ class View_Smarty extends Smarty implements View_Interface
 		}
 	}
 
+	/**
+	 * Render a specific template with context.
+	 * @param  string $name
+	 * @param  array  $context
+	 * @return string
+	 */
+	public function render($name, array $context = [])
+	{
+		$this->assign($context);
+		return $this->fetch($name);
+	}
+
 }
