@@ -18,7 +18,7 @@ if ((defined('_PS_DEBUG') || mt_rand(1, $XHPROF_RAND_MAX) === 1) && extension_lo
 	$XHPROF_LIB_DIR = __DIR__ . '/xhprof_lib';
 	#include_once $XHPROF_LIB_DIR . "/utils/xhprof_lib.php";
 	#include_once $XHPROF_LIB_DIR . "/utils/xhprof_runs.php";
-	xhprof_enable(XHPROF_FLAGS_CPU + XHPROF_FLAGS_MEMORY, array('ignored_functions' =>  array('call_user_func',
+	xhprof_enable(XHPROF_FLAGS_NO_BUILTINS + XHPROF_FLAGS_CPU + XHPROF_FLAGS_MEMORY, array('ignored_functions' =>  array('call_user_func',
 		'call_user_func_array')));
 }
 
