@@ -19,6 +19,8 @@ class Da_LDAP
 
 	private $_cache_bound = [];
 
+	private $_logs = NULL;
+
 	public function __construct(array $opt)
 	{
 		isset($opt['host']) && $this->_host = $opt['host'];
@@ -47,6 +49,7 @@ class Da_LDAP
 			return $this->_conn;
 		}
 
+		Log::info('ldap connect to '.$this->host.':'.$this->_port, __METHOD__);
 		$this->_conn = ldap_connect($this->_host, $this->_port);
 		if (!is_resource($this->_conn)) {
 			throw new Exception('Could not connect to '.$this->_host);
@@ -65,6 +68,7 @@ class Da_LDAP
 		}
 
 		$rdn = $this->rdn($uid);
+		Log::info('ldap bind as '.$rdn, __METHOD__);
 		$bound = @ldap_bind($this->connect(), $rdn, $password);
 		if ($bound) {
 			$this->_cache_bound[$uid] = TRUE;
@@ -77,6 +81,8 @@ class Da_LDAP
 	{
 		$func = 'ldap_'.$name;
 		if (function_exists($func)) {
+			$this->_log(__METHOD__.' call '.$func.', args ', $args);
+
 			static $need_link = ['bind', 'get_entries', 'add', 'get_values'
 			, 'list', 'close', 'unbind', 'read', 'sort', 'errno', 'error'
 			, 'delete', 'get_dn', 'modify', 'rename', 'search', 'compare'
@@ -85,6 +91,7 @@ class Da_LDAP
 			, 'parse_result', 'count_entries', 'get_attributes', 'get_values_len'
 			, 'next_attribute', 'next_reference', 'first_attribute', 'first_reference'
 			, 'parse_reference', 'set_rebind_proc', 'control_paged_result', 'control_paged_result_response'];
+
 			if (in_array($name, $need_link)) {
 				array_unshift($args, $this->connect());
 			}
@@ -99,4 +106,32 @@ class Da_LDAP
 	{
 		return sprintf($this->_bind_format, $uid);
 	}
+
+	protected function _log($msg, $params = [])
+	{
+		if (defined('_DB_DEBUG') && TRUE === _DB_DEBUG) {
+			if ($this->_logs === NULL) {
+				$this->_logs = [];
+			}
+			$this->_logs[] = $msg . (count($params) > 0 ? ' :' . Arr::dullOut($params) : '');
+			//Log::debug($msg, __CLASS__ . ' ' . $this->key);
+		}
+	}
+
+	/**
+	 * @return array
+	 */
+	public function errorInfo()
+	{
+		return [$this->error()];
+	}
+
+	/**
+	 * @return array
+	 */
+	public function getLogs()
+	{
+		return [];
+	}
+
 } // END class Da_LDAP
